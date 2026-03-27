@@ -1,46 +1,36 @@
-# ⬡ Hockey Tracker — Flask Web App
+# 🏑 Hockey Stats App — In Progress
 
-## Instalación
+Desktop application for real-time field hockey match statistics tracking, built with Python and Tkinter.
 
-1. Instala Flask (solo la primera vez):
-```
-pip install flask
-```
+## Features
+- Track goals, shots, fouls, PCs and corners per team
+- Real-time score tracking
+- Player roster management with starters and substitutes
+- Statistics saved locally in JSON (planned migration to Supabase)
+- Quarter and time tracking per event
 
-2. Ejecuta la app:
-```
-python app.py
-```
+## Requirements
+- Python 3.x
+- tkinter (included with Python)
 
-3. Abre tu navegador en:
+## How to run
 ```
-http://localhost:5000
+python teams_data.py
 ```
+Start by entering the team names and players, then the match screen will open automatically.
 
-## Estructura de archivos
-
+## File structure
 ```
 hockey_app/
-├── app.py              ← servidor Flask (backend)
-├── templates/
-│   └── index.html      ← interfaz web (frontend)
-└── saves/              ← aquí se guardan los partidos (se crea automáticamente)
+├── main.py              ← match screen
+├── teams_data.py        ← team and player setup
+├── team1_buttons.py     ← team 1 stat buttons
+├── team2_buttons.py     ← team 2 stat buttons
+├── timer_quarter.py     ← match timer
+├── stats.py             ← statistics logic
+└── subs.py              ← substitutions
 ```
 
-## Funcionalidades
-
-- Registra goles, tiros, PCs, corners y tarjetas por equipo
-- Cambia los nombres de los equipos antes del partido
-- Guarda las estadísticas en un archivo JSON en la carpeta `saves/`
-- Reinicia el marcador para un nuevo partido
-
-## Compartir con otros (red local)
-
-Para que otros en tu red WiFi puedan acceder:
-
-Cambia la última línea de `app.py` por:
-```python
-app.run(debug=False, host='0.0.0.0', port=5000)
-```
-
-Luego comparte tu IP local (ej: `http://192.168.1.X:5000`)
+## Planned
+- Supabase cloud database for multi-device sync
+- Interactive dashboards for coaches
