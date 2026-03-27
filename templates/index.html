@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Hockey Tracker</title>
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet"/>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --green: #00c853;
+      --green-dim: #00913c;
+      --bg: #0a0f0a;
+      --panel: #111811;
+      --border: #1e2e1e;
+      --text: #e8f5e8;
+      --muted: #6b8f6b;
+      --red: #ff3d3d;
+      --yellow: #ffd600;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'DM Sans', sans-serif;
+      min-height: 100vh;
+      background-image: radial-gradient(ellipse at 20% 0%, #0d2e0d 0%, transparent 60%),
+                        radial-gradient(ellipse at 80% 100%, #0a2010 0%, transparent 60%);
+    }
+
+    header {
+      text-align: center;
+      padding: 2rem 1rem 1rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    header h1 {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: clamp(2.5rem, 6vw, 4.5rem);
+      letter-spacing: 0.1em;
+      color: var(--green);
+      text-shadow: 0 0 40px rgba(0,200,83,0.3);
+    }
+
+    header p { color: var(--muted); font-size: 0.9rem; margin-top: 0.25rem; }
+
+    /* Name editor */
+    .name-editor {
+      display: flex;
+      justify-content: center;
+      gap: 1rem;
+      padding: 1.2rem 1rem;
+      flex-wrap: wrap;
+    }
+
+    .name-editor input {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      color: var(--text);
+      font-family: 'DM Sans', sans-serif;
+      font-size: 1rem;
+      padding: 0.5rem 1rem;
+      border-radius: 6px;
+      text-align: center;
+      width: 160px;
+      transition: border-color 0.2s;
+    }
+    .name-editor input:focus { outline: none; border-color: var(--green); }
+
+    .name-editor button {
+      background: var(--green-dim);
+      color: #fff;
+      border: none;
+      padding: 0.5rem 1.2rem;
+      border-radius: 6px;
+      cursor: pointer;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 0.9rem;
+      transition: background 0.2s;
+    }
+    .name-editor button:hover { background: var(--green); }
+
+    /* Scoreboard */
+    .scoreboard {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 0;
+      padding: 1.5rem 1rem;
+      flex-wrap: wrap;
+    }
+
+    .team-score {
+      text-align: center;
+      min-width: 200px;
+    }
+
+    .team-score .team-name {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 1.6rem;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+      transition: color 0.3s;
+    }
+
+    .team-score .goal-count {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: clamp(5rem, 14vw, 9rem);
+      line-height: 1;
+      color: var(--text);
+      transition: transform 0.15s, color 0.15s;
+    }
+
+    .goal-count.bump {
+      transform: scale(1.15);
+      color: var(--green);
+    }
+
+    .vs-divider {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 2rem;
+      color: var(--border);
+      padding: 0 2rem;
+      padding-top: 2rem;
+    }
+
+    /* Stats mini */
+    .stats-row {
+      display: flex;
+      justify-content: center;
+      gap: 2rem;
+      padding: 0.5rem 1rem 1.5rem;
+      flex-wrap: wrap;
+    }
+
+    .stat-chip {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.6rem 1.2rem;
+      text-align: center;
+      min-width: 80px;
+    }
+
+    .stat-chip .stat-val {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 1.8rem;
+      color: var(--green);
+      line-height: 1;
+    }
+
+    .stat-chip .stat-label {
+      font-size: 0.7rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+    }
+
+    /* Action panels */
+    .action-area {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 0 1rem 2rem;
+    }
+
+    .team-panel {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.2rem;
+    }
+
+    .team-panel h3 {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 1.3rem;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+      margin-bottom: 0.8rem;
+      text-align: center;
+    }
+
+    .event-btn {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      width: 100%;
+      background: #161f16;
+      border: 1px solid var(--border);
+      color: var(--text);
+      font-family: 'DM Sans', sans-serif;
+      font-size: 0.95rem;
+      font-weight: 500;
+      padding: 0.7rem 1rem;
+      border-radius: 8px;
+      cursor: pointer;
+      margin-bottom: 0.5rem;
+      transition: background 0.15s, border-color 0.15s, transform 0.1s;
+    }
+
+    .event-btn:hover { background: #1e2e1e; border-color: var(--green); }
+    .event-btn:active { transform: scale(0.97); }
+    .event-btn .icon { font-size: 1.1rem; }
+
+    /* Controls */
+    .controls {
+      display: flex;
+      justify-content: center;
+      gap: 1rem;
+      padding: 0 1rem 3rem;
+      flex-wrap: wrap;
+    }
+
+    .ctrl-btn {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      font-family: 'DM Sans', sans-serif;
+      font-size: 0.9rem;
+      padding: 0.6rem 1.5rem;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .ctrl-btn:hover { border-color: var(--green); color: var(--text); }
+    .ctrl-btn.save:hover { border-color: var(--green); color: var(--green); }
+    .ctrl-btn.reset:hover { border-color: var(--red); color: var(--red); }
+
+    /* Toast */
+    #toast {
+      position: fixed;
+      bottom: 2rem;
+      left: 50%;
+      transform: translateX(-50%) translateY(4rem);
+      background: var(--green-dim);
+      color: #fff;
+      padding: 0.7rem 1.5rem;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      opacity: 0;
+      transition: all 0.3s;
+      pointer-events: none;
+      z-index: 100;
+    }
+    #toast.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+
+    @media (max-width: 500px) {
+      .action-area { grid-template-columns: 1fr; }
+      .vs-divider { padding: 0 1rem; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>⬡ Hockey Tracker</h1>
+  <p>Registra eventos en tiempo real</p>
+</header>
+
+<!-- Team name editor -->
+<div class="name-editor">
+  <input type="text" id="input-home" placeholder="Equipo local" maxlength="20"/>
+  <button onclick="setNames()">Actualizar nombres</button>
+  <input type="text" id="input-away" placeholder="Equipo visitante" maxlength="20"/>
+</div>
+
+<!-- Scoreboard -->
+<div class="scoreboard">
+  <div class="team-score">
+    <div class="team-name" id="name-home">Local</div>
+    <div class="goal-count" id="goals-home">0</div>
+  </div>
+  <div class="vs-divider">–</div>
+  <div class="team-score">
+    <div class="team-name" id="name-away">Visitante</div>
+    <div class="goal-count" id="goals-away">0</div>
+  </div>
+</div>
+
+<!-- Mini stats -->
+<div class="stats-row" id="stats-row">
+  <!-- filled by JS -->
+</div>
+
+<!-- Action buttons -->
+<div class="action-area">
+  <div class="team-panel">
+    <h3 id="panel-name-home">Local</h3>
+    <button class="event-btn" onclick="register('home','goals')"><span class="icon">⚽</span> Gol</button>
+    <button class="event-btn" onclick="register('home','shots')"><span class="icon">🏑</span> Tiro</button>
+    <button class="event-btn" onclick="register('home','pc')"><span class="icon">🔴</span> Penalty Corner</button>
+    <button class="event-btn" onclick="register('home','corners')"><span class="icon">📐</span> Corner</button>
+    <button class="event-btn" onclick="register('home','cards')"><span class="icon">🟨</span> Tarjeta</button>
+  </div>
+  <div class="team-panel">
+    <h3 id="panel-name-away">Visitante</h3>
+    <button class="event-btn" onclick="register('away','goals')"><span class="icon">⚽</span> Gol</button>
+    <button class="event-btn" onclick="register('away','shots')"><span class="icon">🏑</span> Tiro</button>
+    <button class="event-btn" onclick="register('away','pc')"><span class="icon">🔴</span> Penalty Corner</button>
+    <button class="event-btn" onclick="register('away','corners')"><span class="icon">📐</span> Corner</button>
+    <button class="event-btn" onclick="register('away','cards')"><span class="icon">🟨</span> Tarjeta</button>
+  </div>
+</div>
+
+<!-- Controls -->
+<div class="controls">
+  <button class="ctrl-btn save" onclick="saveStats()">💾 Guardar partido</button>
+  <button class="ctrl-btn reset" onclick="resetStats()">🔄 Reiniciar</button>
+</div>
+
+<div id="toast"></div>
+
+<script>
+  function showToast(msg, color = '#00913c') {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.style.background = color;
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 2800);
+  }
+
+  function updateUI(stats) {
+    for (const team of ['home', 'away']) {
+      const s = stats[team];
+      document.getElementById(`name-${team}`).textContent = s.name;
+      document.getElementById(`panel-name-${team}`).textContent = s.name;
+      document.getElementById(`goals-${team}`).textContent = s.goals;
+    }
+    // Mini stats chips
+    const labels = { shots: 'Tiros', pc: 'PCs', corners: 'Corners', cards: 'Tarjetas' };
+    const row = document.getElementById('stats-row');
+    row.innerHTML = '';
+    for (const [key, label] of Object.entries(labels)) {
+      const chip = document.createElement('div');
+      chip.className = 'stat-chip';
+      chip.innerHTML = `
+        <div class="stat-val">${stats.home[key]} – ${stats.away[key]}</div>
+        <div class="stat-label">${label}</div>
+      `;
+      row.appendChild(chip);
+    }
+  }
+
+  async function register(team, event) {
+    const goalEl = document.getElementById(`goals-${team}`);
+    if (event === 'goals') {
+      goalEl.classList.add('bump');
+      setTimeout(() => goalEl.classList.remove('bump'), 300);
+    }
+    const res = await fetch('/api/event', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ team, event })
+    });
+    updateUI(await res.json());
+  }
+
+  async function setNames() {
+    const home = document.getElementById('input-home').value.trim() || 'Local';
+    const away = document.getElementById('input-away').value.trim() || 'Visitante';
+    const res = await fetch('/api/set_names', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ home, away })
+    });
+    updateUI(await res.json());
+    showToast('Nombres actualizados');
+  }
+
+  async function saveStats() {
+    const res = await fetch('/api/save', { method: 'POST' });
+    const data = await res.json();
+    showToast(data.message);
+  }
+
+  async function resetStats() {
+    if (!confirm('¿Reiniciar todas las estadísticas?')) return;
+    const res = await fetch('/api/reset', { method: 'POST' });
+    updateUI(await res.json());
+    showToast('Estadísticas reiniciadas', '#555');
+  }
+
+  // Load initial stats
+  fetch('/api/stats').then(r => r.json()).then(updateUI);
+</script>
+
+</body>
+</html>
