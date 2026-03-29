@@ -2,7 +2,11 @@ import tkinter as tk
 import json
 import os
 
-def show_subs(root, team):
+selected_sub = [None]
+selected_team = [None]
+
+#Show substitutions
+def show_subs(root, team, refresh_callback):
     if not os.path.exists("teams_data.json"):
         return
     with open("teams_data.json") as f:
@@ -30,4 +34,33 @@ def show_subs(root, team):
         tk.Label(popup, text="No substitutions available", font=("Arial", 12)).pack(pady=20)
     else:
         for sub in subs:
-            tk.Button(popup, text=f"{sub[0]}", font=("Arial", 12)).pack(pady=5)
+            def select_sub(s=sub):
+                selected_sub[0] = s
+                selected_team[0] = team
+                popup.destroy()
+            tk.Button(popup, text=f"{sub[0]}", font=("Arial", 12), command=select_sub).pack(pady=5)
+
+#Select sub for starter
+def make_substitution(team, player_out, refresh_callback):
+    if selected_sub[0] is None or selected_team[0] != team:
+        return
+    if not os.path.exists("teams_data.json"):
+        return
+    with open("teams_data.json") as f:
+        data = json.load(f)
+    
+    players_key = "players_team1" if team == 1 else "players_team2"
+    players = data.get(players_key, [])
+    
+    for player in players:
+        if player[0] == player_out[0]:
+            player[4] = "No"
+        if player[0] == selected_sub[0][0]:
+            player[4] = "Yes"
+    
+    with open("teams_data.json", "w") as f:
+        json.dump(data, f, indent=4)
+    
+    selected_sub[0] = None
+    selected_team[0] = None
+    refresh_callback()

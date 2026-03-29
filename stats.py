@@ -22,7 +22,7 @@ def save_stats(stats):
     with open(stats_file, "w") as f:
         json.dump(stats, f, indent=2)
 
-def add_stat(team: str, event: str, quarter: str = None, time: str = None, result: str = None):
+def add_stat(team: str, event: str, quarter: str = None, time: str = None, result: str = None, player: str = None):
     team1, team2 = get_teams_names()
     team_name = team1 if team == "team1" else team2
 
@@ -34,7 +34,8 @@ def add_stat(team: str, event: str, quarter: str = None, time: str = None, resul
         "event": event,
         "quarter": quarter,
         "time": time,
-        "result": result if event in ["shot", "save"] else None
+        "result": result if event in ["shot", "save"] else None,
+        "player": player
     }
     data[team_name].append(entry)
     save_stats(data)
