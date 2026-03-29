@@ -9,7 +9,7 @@ def main():
     root.title("Teams and players")
     root.geometry("1500x800")
 
-    columns = ("No", "First Name", "Last Name", "Position", "Starter")
+    columns = ("No", "First Name", "Last Name", "Starter")
 
     # Team 1
     tk.Label(root, text="Team 1  - ", font=("Arial", 18, "bold")).place(x=70, y=50)
@@ -33,7 +33,7 @@ def main():
     def add_player1():
         count = len(table1.get_children())
         tag = "even" if count % 2 == 0 else "odd"
-        table1.insert("", "end", values=("", "", "", "", ""), tags=(tag,))
+        table1.insert("", "end", values=("", "", "", ""), tags=(tag,))
     tk.Button(root, text="Add Player", font=("Arial", 10, "bold"), bg="#B0A9A9", command=add_player1).place(x=525, y=370)
 
     # Team 2
@@ -58,7 +58,7 @@ def main():
     def add_player2():
         count = len(table2.get_children())
         tag = "even" if count % 2 == 0 else "odd"
-        table2.insert("", "end", values=("", "", "", "", ""), tags=(tag,))
+        table2.insert("", "end", values=("", "", "", ""), tags=(tag,))
     tk.Button(root, text="Add Player", font=("Arial", 10, "bold"), bg="#B0A9A9", command=add_player2).place(x=1355, y=370)
 
     # Edit cell
@@ -67,10 +67,17 @@ def main():
         column = table.identify_column(event.x)
         if not data or not column:
             return
+        
         column_index = int(column.replace("#", "")) - 1
         x, y, width, height = table.bbox(data, column)
         value = table.item(data, "values")[column_index]
-        entry = tk.Entry(root, font=("Arial", 10))
+
+        if column_index == 3:  # Starter column
+            current_values = list(table.item(data, "values"))
+            current_values[3] = "No" if value == "Yes" else "Yes"
+            table.item(data, values=current_values)
+        else:
+            entry = tk.Entry(root, font=("Arial", 10))
         entry.place(x=x + offset_x, y=y + offset_y, width=width, height=height)
         entry.insert(0, value)
         entry.focus()
