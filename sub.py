@@ -14,7 +14,7 @@ def show_subs(root, team, refresh_callback):
     
     players_key = "players_team1" if team == 1 else "players_team2"
     players = data.get(players_key, [])
-    subs = [p for p in players if p[4] != "Yes" and p[4] != 'yes' and p[1] and p[2]]
+    subs = [p for p in players if p[3] != "Yes" and p[3] != 'yes' and p[1] and p[2]]
 
     popup = tk.Toplevel(root)
     popup.title(f"Substitutions - Team {team}")
@@ -54,9 +54,9 @@ def make_substitution(team, player_out, refresh_callback):
     
     for player in players:
         if player[0] == player_out[0]:
-            player[4] = "No"
+            player[3] = "No"
         if player[0] == selected_sub[0][0]:
-            player[4] = "Yes"
+            player[3] = "Yes"
     
     with open("teams_data.json", "w") as f:
         json.dump(data, f, indent=4)

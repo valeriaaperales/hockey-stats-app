@@ -12,7 +12,7 @@ import sub as sub
 def main():
     root = tk.Tk()
     root.title("Hockey Stats")
-    root.geometry("1500x800")
+    root.state("zoomed")
 
     # Load team data
     colors_hex = {
@@ -118,7 +118,7 @@ def main():
 
         tk.Label(player_frame1, text="Players", font=("Arial", 14, "bold")).pack(pady=10)
         for p in p1:
-            if p[4].lower() == "yes" and p[1] and p[2]:
+            if p[3].lower() == "yes" and p[1] and p[2]:
                 tk.Button(player_frame1, text=f"{p[0]} - {p[1][0]}. {p[2]}", font=("Arial", 12, "bold"),
                     command=lambda pl=p: on_player_click(pl, "team1")).pack(pady=7)
         tk.Button(player_frame1, text="Subs", font=("Arial", 12, "bold"), bg="#B0A9A9",
@@ -126,7 +126,7 @@ def main():
 
         tk.Label(player_frame2, text="Players", font=("Arial", 14, "bold")).pack(pady=10)
         for p in p2:
-            if p[4].lower() == "yes" and p[1] and p[2]:
+            if p[3].lower() == "yes" and p[1] and p[2]:
                 tk.Button(player_frame2, text=f"{p[0]} - {p[1][0]}. {p[2]}", font=("Arial", 12, "bold"),
                     command=lambda pl=p: on_player_click(pl, "team2")).pack(pady=7)
         tk.Button(player_frame2, text="Subs", font=("Arial", 12, "bold"), bg="#B0A9A9",

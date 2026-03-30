@@ -1,5 +1,5 @@
 import tkinter as tk
-from tkinter import ttk
+from tkinter import ttk, messagebox
 import subprocess
 import sys
 import json
@@ -7,7 +7,7 @@ import json
 def main():
     root = tk.Tk()
     root.title("Teams and players")
-    root.geometry("1500x800")
+    root.state("zoomed")
 
     columns = ("No", "First Name", "Last Name", "Starter")
 
@@ -22,7 +22,7 @@ def main():
     select1.place(x=500, y=100, width=100)
     select1.set("Select Color...")
 
-    table1 = ttk.Treeview(root, columns=columns, show="headings", height=8)
+    table1 = ttk.Treeview(root, columns=columns, show="headings", height=25)
     for col in columns:
         table1.heading(col, text=col)
         table1.column(col, width=80, anchor="center")
@@ -30,11 +30,21 @@ def main():
     table1.tag_configure("odd", background="#c9c9c9")
     table1.tag_configure("even", background="#e2e2e2")
 
+    for i in range(8):
+        tag = "even" if i % 2 == 0 else "odd"
+        table1.insert("", "end", values=("", "", "", ""), tags=(tag,))
+
     def add_player1():
         count = len(table1.get_children())
         tag = "even" if count % 2 == 0 else "odd"
         table1.insert("", "end", values=("", "", "", ""), tags=(tag,))
-    tk.Button(root, text="Add Player", font=("Arial", 10, "bold"), bg="#B0A9A9", command=add_player1).place(x=525, y=370)
+    tk.Button(root, text="Add Player", font=("Arial", 10, "bold"), bg="#B0A9A9", command=add_player1).place(x=525, y=600, width=105, height=46)
+
+    def remove_player1():
+        selected = table1.selection()
+        if selected:
+            table1.delete(selected[0])
+    tk.Button(root, text="Remove Player", font=("Arial", 10, "bold"), bg="#B0A9A9", command=remove_player1).place(x=525, y=650, width=105, height=46)
 
     # Team 2
     tk.Label(root, text="Team 2  - ", font=("Arial", 18, "bold")).place(x=900, y=50)
@@ -47,7 +57,7 @@ def main():
     select2.place(x=1333, y=100, width=100)
     select2.set("Select Color...")
 
-    table2 = ttk.Treeview(root, columns=columns, show="headings", height=8)
+    table2 = ttk.Treeview(root, columns=columns, show="headings", height=25)
     for col in columns:
         table2.heading(col, text=col)
         table2.column(col, width=80, anchor="center")
@@ -55,11 +65,52 @@ def main():
     table2.tag_configure("odd", background="#c9c9c9")
     table2.tag_configure("even", background="#e2e2e2")
 
+    for i in range(8):
+        tag = "even" if i % 2 == 0 else "odd"
+        table2.insert("", "end", values=("", "", "", ""), tags=(tag,))
+
     def add_player2():
         count = len(table2.get_children())
         tag = "even" if count % 2 == 0 else "odd"
         table2.insert("", "end", values=("", "", "", ""), tags=(tag,))
-    tk.Button(root, text="Add Player", font=("Arial", 10, "bold"), bg="#B0A9A9", command=add_player2).place(x=1355, y=370)
+    tk.Button(root, text="Add Player", font=("Arial", 10, "bold"), bg="#B0A9A9", command=add_player2).place(x=1355, y=600, width=105, height=46)
+
+    def remove_player2():
+        selected = table2.selection()
+        if selected:
+            table2.delete(selected[0])
+    tk.Button(root, text="Remove Player", font=("Arial", 10, "bold"), bg="#B0A9A9", command=remove_player2).place(x=1355, y=650, width=105, height=46)
+
+    # Colors
+    def show_color():
+        colors = ["Red", "Blue", "Green", "Yellow", "Black", "White"]
+        colors_hex = {
+            "Red": "#FF0000", "Blue": "#0000FF", "Green": "#00AA00",
+            "Yellow": "#FFD700", "Black": "#000000", "White": "#FFFFFF"
+        }
+
+        color1 = select1.get()
+        color2 = select2.get()
+
+        if color1 in colors_hex:
+            canvas1.configure(bg=colors_hex[color1])
+        if color2 in colors_hex:
+            canvas2.configure(bg=colors_hex[color2])
+
+        #Update color options to prevent selecting the same color for both teams
+        if color1 in colors:
+            select2.config(values=[c for c in colors if c != color1])
+        else:
+            select2.config(values=colors)
+        
+        #Reset if color selected is not available anymore
+        if color1 == color2:
+            select2.set("Select Color...")
+            canvas2.configure(bg="#DDDDDD")
+
+    select1.bind("<<ComboboxSelected>>", lambda event: show_color())
+    select2.bind("<<ComboboxSelected>>", lambda event: show_color())
+
 
     # Edit cell
     def edit_cell(event, table, offset_x, offset_y):
@@ -67,7 +118,6 @@ def main():
         column = table.identify_column(event.x)
         if not data or not column:
             return
-        
         column_index = int(column.replace("#", "")) - 1
         x, y, width, height = table.bbox(data, column)
         value = table.item(data, "values")[column_index]
@@ -77,42 +127,77 @@ def main():
             current_values[3] = "No" if value == "Yes" else "Yes"
             table.item(data, values=current_values)
         else:
-            entry = tk.Entry(root, font=("Arial", 10))
-        entry.place(x=x + offset_x, y=y + offset_y, width=width, height=height)
-        entry.insert(0, value)
-        entry.focus()
-        def save_edit(event):
-            new_value = entry.get()
-            current_values = list(table.item(data, "values"))
-            current_values[column_index] = new_value
-            table.item(data, values=current_values)
-            entry.destroy()
-        entry.bind("<Return>", save_edit)
-        entry.bind("<FocusOut>", save_edit)
+            def validate_input(char, col_index):
+                if col_index == 0:  #Only numbers for the No column
+                    return char.isdigit()
+                else:  # Only letters for the First Name and Last Name columns
+                    return char.isalpha() or char == ""
+                
+            vcmd = (root.register(lambda P, col=column_index: validate_input(P, col)), '%S')
 
-    table1.bind("<Button-1>", lambda event: edit_cell(event, table1, 70, 170))
-    table2.bind("<Button-1>", lambda event: edit_cell(event, table2, 900, 170))
+            entry = tk.Entry(root, font=("Arial", 10), validate="key", validatecommand=vcmd)
+            entry.place(x=x + offset_x, y=y + offset_y, width=width, height=height)
+            entry.insert(0, value)
+            entry.focus()
+            def capitalize_entry(event):
+                text = entry.get()
+                entry.delete(0, tk.END)
+                entry.insert(0, text.upper())
+            entry.bind("<KeyRelease>", capitalize_entry)
+            def save_edit(event=None):
+                new_value = entry.get()
+                current_values = list(table.item(data, "values"))
+                current_values[column_index] = new_value
+                table.item(data, values=current_values)
+                entry.destroy()
+            entry.bind("<Return>", save_edit)
+            entry.bind("<FocusOut>", save_edit)
 
-    # Colors
-    def show_color():
-        color1 = select1.get()
-        color2 = select2.get()
-        colors_hex = {
-            "Red": "#FF0000", "Blue": "#0000FF", "Green": "#00AA00",
-            "Yellow": "#FFD700", "Black": "#000000", "White": "#FFFFFF"
-        }
-        if color1 in colors_hex:
-            canvas1.configure(bg=colors_hex[color1])
-        if color2 in colors_hex:
-            canvas2.configure(bg=colors_hex[color2])
+    #Capitalize team names
+    def capitalize_team1(event):
+        team = team1_entry.get()
+        team1_entry.delete(0, tk.END)
+        team1_entry.insert(0, team.upper())
+    
+    def capitalize_team2(event):
+        team = team2_entry.get()
+        team2_entry.delete(0, tk.END)
+        team2_entry.insert(0, team.upper())
 
-    select1.bind("<<ComboboxSelected>>", lambda event: show_color())
-    select2.bind("<<ComboboxSelected>>", lambda event: show_color())
+    vcmd_alpha = (root.register(lambda P: P.isalpha() or P == " "), '%S') #Only letters and spaces for team names
+    team1_entry.config(validate="key", validatecommand=vcmd_alpha)
+    team2_entry.config(validate="key", validatecommand=vcmd_alpha)
+    team1_entry.bind("<KeyRelease>", capitalize_team1)
+    team2_entry.bind("<KeyRelease>", capitalize_team2)
 
     # Save teams
     def save_teams():
+        if not team1_entry.get().strip():
+            messagebox.showwarning("Warning", "Please enter a name for Team 1.")
+            return
+        if not team2_entry.get().strip():
+            messagebox.showwarning("Warning", "Please enter a name for Team 2.")
+            return
+        if select1.get() == "Select Color...":
+            messagebox.showwarning("Warning", "Please select a color for Team 1.")
+            return
+        if select2.get() == "Select Color...":
+            messagebox.showwarning("Warning", "Please select a color for Team 2.")
+            return
+
         players1 = [list(table1.item(i, "values")) for i in table1.get_children()]
         players2 = [list(table2.item(i, "values")) for i in table2.get_children()]
+
+        valid_players1 = [p for p in players1 if p[0] and p[1] and p[2]]
+        valid_players2 = [p for p in players2 if p[0] and p[1] and p[2]]
+
+        if len(valid_players1) < 8:
+            messagebox.showwarning("Warning", f"Team 1 must have at least 8 players with number, first name and last name valid).")
+            return
+        if len(valid_players2) < 8:
+            messagebox.showwarning("Warning", f"Team 2 must have at least 8 players with number, first name and last name valid).")
+            return
+
         data = {
             "team1_name": team1_entry.get(),
             "team2_name": team2_entry.get(),
