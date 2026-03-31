@@ -23,14 +23,40 @@ def setup_timer(root):
     time_frame.place(x=600, y=130, width=300, height=80)
     time_label = tk.Label(
             time_frame,
-            text="1:00",
+            text="00:10",
             font=("Arial", 18, "bold"),
             fg="black",
             bg="#ffffff"
     )
-    time_label.place(relx=0.3, rely=0.55, anchor=tk.CENTER)
+    time_label.place(relx=0.3, rely=0.5, anchor=tk.CENTER)
 
-    seconds = [1 * 60]
+    #Adjust timer
+    up_btn = tk.Button(time_frame, text="▲", font=("Arial", 12), bg="#F57E7E", command=lambda: adjust_time(1))
+    down_btn = tk.Button(time_frame, text="▼", font=("Arial", 12), bg="#F57E7E", command=lambda: adjust_time(-1))
+    up_btn.place(relx=0.30, rely=0.2, anchor=tk.CENTER, height=20, width=20)
+    down_btn.place(relx=0.30, rely=0.8, anchor=tk.CENTER, height=20, width=20)
+    up_btn.place_forget()  # Hide initially
+    down_btn.place_forget()  # Hide initially
+
+    def adjust_time(delta):
+        seconds[0] = max(0, seconds[0] + delta)
+        mins, secs = divmod(seconds[0], 60)
+        time_label.config(text=f"{mins:02d}:{secs:02d}")
+    
+    def toggle_adjust_buttons(event):
+        if up_btn.winfo_ismapped():
+            up_btn.place_forget()
+            down_btn.place_forget()
+        else:
+            up_btn.place(relx=0.30, rely=0.2, anchor=tk.CENTER, height=20, width=20)
+            down_btn.place(relx=0.30, rely=0.8, anchor=tk.CENTER, height=20, width=20)
+            root.bind("<Up>", lambda event: adjust_time(1)) # Arrow keys to adjust time
+            root.bind("<Down>", lambda event: adjust_time(-1)) # Arrow keys to adjust time
+    
+    time_label.bind("<Button-1>", toggle_adjust_buttons)  # Show buttons on click
+
+
+    seconds = [10]
     running = [False]
     finished = [False]
     job = [None]
@@ -50,6 +76,11 @@ def setup_timer(root):
             if current_quarter[0] < len(quarters) - 1:
                 current_quarter[0] += 1
                 quarter_label.config(text=quarters[current_quarter[0]])
+            else:
+                start.config(text="Ended")
+                start.config(state="disabled")
+                tk.Label(root, text="Match ended", font=("Arial", 24, "bold"), fg="red").place(x=650, y=250)
+
     
     #Start/Stop/Reset button function
     def toggle_timer():
@@ -67,8 +98,8 @@ def setup_timer(root):
             finished[0] = False
             if job[0]:
                 root.after_cancel(job[0])
-            seconds[0] = 1 * 60
-            time_label.config(text="01:00")
+            seconds[0] = 10
+            time_label.config(text="00:10")
             start.config(text="Start")
 
     #Get quarter and time
@@ -81,6 +112,8 @@ def setup_timer(root):
         }
 
     start = tk.Button(root, text="Start", font=("Arial", 12, "bold"), bg="#B0A9A9", command=toggle_timer)
-    start.place(x=770, y=148, width=100, height=50) #Start button
+    start.place(x=770, y=145, width=100, height=50) #Start button
+
+    root.bind("<space>", lambda event: toggle_timer()) #Spacebar to start/stop/reset
 
     return get_quarter_time

@@ -2,6 +2,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 import subprocess
 import sys
+import os
 import json
 
 def main():
@@ -38,13 +39,11 @@ def main():
         count = len(table1.get_children())
         tag = "even" if count % 2 == 0 else "odd"
         table1.insert("", "end", values=("", "", "", ""), tags=(tag,))
-    tk.Button(root, text="Add Player", font=("Arial", 10, "bold"), bg="#B0A9A9", command=add_player1).place(x=525, y=600, width=105, height=46)
 
     def remove_player1():
         selected = table1.selection()
         if selected:
             table1.delete(selected[0])
-    tk.Button(root, text="Remove Player", font=("Arial", 10, "bold"), bg="#B0A9A9", command=remove_player1).place(x=525, y=650, width=105, height=46)
 
     # Team 2
     tk.Label(root, text="Team 2  - ", font=("Arial", 18, "bold")).place(x=900, y=50)
@@ -73,44 +72,11 @@ def main():
         count = len(table2.get_children())
         tag = "even" if count % 2 == 0 else "odd"
         table2.insert("", "end", values=("", "", "", ""), tags=(tag,))
-    tk.Button(root, text="Add Player", font=("Arial", 10, "bold"), bg="#B0A9A9", command=add_player2).place(x=1355, y=600, width=105, height=46)
 
     def remove_player2():
         selected = table2.selection()
         if selected:
             table2.delete(selected[0])
-    tk.Button(root, text="Remove Player", font=("Arial", 10, "bold"), bg="#B0A9A9", command=remove_player2).place(x=1355, y=650, width=105, height=46)
-
-    # Colors
-    def show_color():
-        colors = ["Red", "Blue", "Green", "Yellow", "Black", "White"]
-        colors_hex = {
-            "Red": "#FF0000", "Blue": "#0000FF", "Green": "#00AA00",
-            "Yellow": "#FFD700", "Black": "#000000", "White": "#FFFFFF"
-        }
-
-        color1 = select1.get()
-        color2 = select2.get()
-
-        if color1 in colors_hex:
-            canvas1.configure(bg=colors_hex[color1])
-        if color2 in colors_hex:
-            canvas2.configure(bg=colors_hex[color2])
-
-        #Update color options to prevent selecting the same color for both teams
-        if color1 in colors:
-            select2.config(values=[c for c in colors if c != color1])
-        else:
-            select2.config(values=colors)
-        
-        #Reset if color selected is not available anymore
-        if color1 == color2:
-            select2.set("Select Color...")
-            canvas2.configure(bg="#DDDDDD")
-
-    select1.bind("<<ComboboxSelected>>", lambda event: show_color())
-    select2.bind("<<ComboboxSelected>>", lambda event: show_color())
-
 
     # Edit cell
     def edit_cell(event, table, offset_x, offset_y):
@@ -132,9 +98,8 @@ def main():
                     return char.isdigit()
                 else:  # Only letters for the First Name and Last Name columns
                     return char.isalpha() or char == ""
-                
-            vcmd = (root.register(lambda P, col=column_index: validate_input(P, col)), '%S')
 
+            vcmd = (root.register(lambda P, col=column_index: validate_input(P, col)), '%S')
             entry = tk.Entry(root, font=("Arial", 10), validate="key", validatecommand=vcmd)
             entry.place(x=x + offset_x, y=y + offset_y, width=width, height=height)
             entry.insert(0, value)
@@ -153,12 +118,43 @@ def main():
             entry.bind("<Return>", save_edit)
             entry.bind("<FocusOut>", save_edit)
 
+    table1.bind("<Button-1>", lambda event: edit_cell(event, table1, 70, 170))
+    table2.bind("<Button-1>", lambda event: edit_cell(event, table2, 900, 170))
+
+    # Colors
+    def show_color():
+        colors = ["Red", "Blue", "Green", "Yellow", "Black", "White"]
+        colors_hex = {
+            "Red": "#FF0000", "Blue": "#0000FF", "Green": "#00AA00",
+            "Yellow": "#FFD700", "Black": "#000000", "White": "#FFFFFF"
+        }
+        color1 = select1.get()
+        color2 = select2.get()
+        if color1 in colors_hex:
+            canvas1.configure(bg=colors_hex[color1])
+        if color2 in colors_hex:
+            canvas2.configure(bg=colors_hex[color2])
+
+        #Update color options to prevent selecting the same color for both teams
+        if color1 in colors:
+            select2.config(values=[c for c in colors if c != color1])
+        else:
+            select2.config(values=colors)
+
+        #Reset if color selected is not available anymore
+        if color1 == color2:
+            select2.set("Select Color...")
+            canvas2.configure(bg="#DDDDDD")
+
+    select1.bind("<<ComboboxSelected>>", lambda event: show_color())
+    select2.bind("<<ComboboxSelected>>", lambda event: show_color())
+
     #Capitalize team names
     def capitalize_team1(event):
         team = team1_entry.get()
         team1_entry.delete(0, tk.END)
         team1_entry.insert(0, team.upper())
-    
+
     def capitalize_team2(event):
         team = team2_entry.get()
         team2_entry.delete(0, tk.END)
@@ -184,20 +180,16 @@ def main():
         if select2.get() == "Select Color...":
             messagebox.showwarning("Warning", "Please select a color for Team 2.")
             return
-
         players1 = [list(table1.item(i, "values")) for i in table1.get_children()]
         players2 = [list(table2.item(i, "values")) for i in table2.get_children()]
-
         valid_players1 = [p for p in players1 if p[0] and p[1] and p[2]]
         valid_players2 = [p for p in players2 if p[0] and p[1] and p[2]]
-
         if len(valid_players1) < 8:
-            messagebox.showwarning("Warning", f"Team 1 must have at least 8 players with number, first name and last name valid).")
+            messagebox.showwarning("Warning", "Team 1 must have at least 8 players with number, first name and last name valid.")
             return
         if len(valid_players2) < 8:
-            messagebox.showwarning("Warning", f"Team 2 must have at least 8 players with number, first name and last name valid).")
+            messagebox.showwarning("Warning", "Team 2 must have at least 8 players with number, first name and last name valid.")
             return
-
         data = {
             "team1_name": team1_entry.get(),
             "team2_name": team2_entry.get(),
@@ -211,7 +203,12 @@ def main():
         root.destroy()
         subprocess.Popen([sys.executable, "main.py"])
 
-    tk.Button(root, text="Save Teams", font=("Arial", 10, "bold"), bg="#B0A9A9", command=save_teams).place(x=700, y=700)
+    # Buttons
+    addplayer1 = tk.Button(root, text="Add Player", font=("Arial", 10, "bold"), bg="#66B9F0", command=add_player1).place(x=525, y=600, width=105, height=46)
+    removeplayer1 = tk.Button(root, text="Remove Player", font=("Arial", 10, "bold"), bg="#F17272", command=remove_player1).place(x=525, y=650, width=105, height=46)
+    addplayer2 = tk.Button(root, text="Add Player", font=("Arial", 10, "bold"), bg="#66B9F0", command=add_player2).place(x=1355, y=600, width=105, height=46)
+    removeplayer2 = tk.Button(root, text="Remove Player", font=("Arial", 10, "bold"), bg="#F17272", command=remove_player2).place(x=1355, y=650, width=105, height=46)
+    saveteams = tk.Button(root, text="Save Teams", font=("Arial", 10, "bold"), bg="#8FE268", command=save_teams).place(x=660, y=720, width=120, height=70)
 
     root.mainloop()
 
