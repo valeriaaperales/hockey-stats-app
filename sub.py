@@ -14,7 +14,7 @@ def show_subs(root, team, refresh_callback):
 
     players_key = "players_team1" if team == "team1" else "players_team2"
     players = data.get(players_key, [])
-    subs = [p for p in players if p[3].lower() != "yes" and p[1] and p[2]]
+    subs = [p for p in players if p[4].lower() != "yes" and p[1] and p[2]]
 
     popup = tk.Toplevel(root)
     popup.title(f"Substitutions")
@@ -55,13 +55,28 @@ def make_substitution(team, player_out, refresh_callback):
 
     for player in players:
         if player[0] == player_out[0]:  # Player going out
-            player[3] = "No"
+            player[4] = "No"
         if player[0] == selected_sub[0][0]:  # Player coming in
-            player[3] = "Yes"
+            player[4] = "Yes"
 
     with open("teams_data.json", "w") as f:
         json.dump(data, f, indent=4)
 
     selected_sub[0] = None
     selected_team[0] = None
+
+    try:
+        from database import supabase
+        import session as ss
+        team1_id, team2_id = ss.get_teams_ids()
+        team_id = team1_id if team == "team1" else team2_id
+        if team_id:
+            supabase.rpc("make_substitution", {
+                "p_team_id": team_id,
+                "p_player_out": int(player_out[0]),
+                "p_player_in": int(selected_sub[0][0])
+            }).execute()
+    except Exception as e:
+        print(f"Error making substitution in database: {e}")
+
     refresh_callback()

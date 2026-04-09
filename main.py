@@ -8,6 +8,8 @@ import game_state as gs
 import timer_quarter as timer
 import team_controls as tc
 import sub as sub
+from database import supabase
+import session as ss
 
 def main():
     root = tk.Tk()
@@ -31,6 +33,26 @@ def main():
         team2_color = colors_hex.get(data.get("team2_color"), "#FFFFFF")
         players_team1 = data.get("players_team1", [])
         players_team2 = data.get("players_team2", [])
+
+
+
+    #Create match in Supabase
+    match_id = ss.get_match_id()
+    if match_id is None:
+        try:
+            team1_id, team2_id = ss.get_teams_ids()
+            if team1_id and team2_id:
+                match_response = supabase.table("matches").insert({
+                    "team1_id": team1_id,
+                    "team2_id": team2_id,
+                    "team1_score": 0,
+                    "team2_score": 0
+                }).execute()
+                match_id = match_response.data[0]["id"]
+                ss.save_match_id(match_id)
+        except Exception as e:
+            print(f"Error creating match in database: {e}")
+
 
 
     # Timer
@@ -62,16 +84,6 @@ def main():
     score2_label.place(relx=0.5, rely=0.5, anchor=tk.CENTER)
 
 
-    # Possession frames
-    possession1_frame = tk.Frame(root, highlightbackground="black", highlightthickness=2, bg="#ffffff")
-    possession1_frame.place(x=280, y=150, width=240, height=100)
-    tk.Label(possession1_frame, text="Possession", font=("Arial", 14, "bold"), fg="black", bg="#ffffff").place(relx=0.5, rely=0.5, anchor=tk.CENTER)
-
-    possession2_frame = tk.Frame(root, highlightbackground="black", highlightthickness=2, bg="#ffffff")
-    possession2_frame.place(x=980, y=150, width=240, height=100)
-    tk.Label(possession2_frame, text="Possession", font=("Arial", 14, "bold"), fg="black", bg="#ffffff").place(relx=0.5, rely=0.5, anchor=tk.CENTER)
-
-
     # Field
     field_w, field_h = 596, 357.6
     canvas = tk.Canvas(root, bg="#ffffff", highlightbackground="black", highlightthickness=2)
@@ -87,12 +99,18 @@ def main():
 
     # Player click
     def on_player_click(player, team_id):
-    # Primero comprobar si hay una sustitución pendiente
+    # Check uf there is a sub
         if sub.selected_sub[0] is not None and sub.selected_team[0] == team_id:
             sub.make_substitution(team_id, player, refresh_players)
+            if gs.active_frame[0]:
+                gs.active_frame[0].config(highlightbackground="black", highlightthickness=2)
+            gs.active_frame[0] = None
+            if gs.selected_button[0]:
+                gs.selected_button[0].config(bg="#B0A9A9")
+            gs.selected_button[0] = None
             return
 
-        # Si no, registrar evento normal
+        # If not, proceed as normal
         if gs.selected_event[0] is None:
             return
         if gs.selected_event[0]["team"] != team_id:
@@ -101,18 +119,149 @@ def main():
         info = gs.selected_time[0]
         event = gs.selected_event[0]
 
+        # Handle specific events
         if event["event"] == "shot" and event.get("result") == "shot on target":
-            stats.add_stat(event["opposing_team"], "save", quarter=info["quarter"], time=info["time"], result="saved", player=player[0])
-            stats.add_stat(event["team"], "shot", quarter=info["quarter"], time=info["time"], result="shot on target", player=player[0])
+            with open("teams_data.json") as f:
+                data = json.load(f)
+            opposing_players_key = "players_team1" if event["opposing_team"] == "team1" else "players_team2"
+            opposing_players = data.get(opposing_players_key, [])
+            gk = next((p for p in opposing_players if p[3].lower() == "gk" and p[4].lower() == "yes"), None)
+
+            stats.add_stat(event["opposing_team"], "shot", quarter=info["quarter"], time=info["time"], result="saved", player=gk[0] if gk else None, position="GK")
+            stats.add_stat(event["team"], "shot", quarter=info["quarter"], time=info["time"], result="shot on target", player=player[0], position=player[3] if player[3] else None)
         elif event["event"] == "shot" and event.get("result") == "goal":
-            stats.add_stat(event["team"], "shot", quarter=info["quarter"], time=info["time"], result="goal", player=player[0])
-            event["score_label"].config(text=str(int(event["score_label"].cget("text")) + 1))
+            if gs.waiting_assist[0]:
+                #Assist player
+                stats.add_stat(event["team"], "assist", quarter=info["quarter"], time=info["time"], player=player[0], position=player[3] if player[3] else None)
+                gs.waiting_assist[0] = False
+                if gs.selected_button[0]:
+                    gs.selected_button[0].config(bg="#B0A9A9")
+                if gs.active_frame[0]:
+                    gs.active_frame[0].config(highlightbackground="black", highlightthickness=2)
+                gs.selected_button[0] = None
+                gs.active_frame[0] = None
+                gs.selected_event[0] = None
+                return
+            else:
+                #Goal scorer
+                stats.add_stat(event["team"], "shot", quarter=info["quarter"], time=info["time"], result="goal", player=player[0], position=player[3] if player[3] else None)
+                event["score_label"].config(text=str(int(event["score_label"].cget("text")) + 1))
+                try:
+                    match_id = ss.get_match_id()
+                    if match_id:
+                        supabase.rpc("update_score", {
+                            "p_match_id": match_id,
+                            "p_team": event["team"]
+                        }).execute()
+                except Exception as e:
+                    print(f"Error updating score in database: {e}")
+                
+                #Ask for assist
+                def on_yes():
+                    gs.waiting_assist[0] = True
+                    active = player_frame1 if event["team"] == "team1" else player_frame2
+                    active.config(highlightbackground="#FFD700", highlightthickness=5)
+                    gs.active_frame[0] = active
+                    popup.destroy()
+
+                def on_no():
+                    gs.waiting_assist[0] = False
+                    if gs.selected_button[0]:
+                        gs.selected_button[0].config(bg="#B0A9A9")
+                    if gs.active_frame[0]:
+                        gs.active_frame[0].config(highlightbackground="black", highlightthickness=2)
+                    gs.selected_button[0] = None
+                    gs.active_frame[0] = None
+                    gs.selected_event[0] = None
+                    popup.destroy()
+                
+                popup = tk.Toplevel(root)
+                popup.title("Assist")
+                popup.geometry("300x150")
+                popup.resizable(False, False)
+                popup.grab_set()
+                popup.update_idletasks()
+                x = (popup.winfo_screenwidth() // 2) - 150
+                y = (popup.winfo_screenheight() // 2) - 75
+                popup.geometry(f"300x150+{x}+{y}")
+                tk.Label(popup, text="Was there an assist?", font=("Arial", 12)).pack(pady=20)
+                tk.Button(popup, text="Yes", font=("Arial", 10, "bold"), command=on_yes).pack(side="left", expand=True, padx=20, pady=10)
+                tk.Button(popup, text="No", font=("Arial", 10, "bold"), command=on_no).pack(side="right", expand=True, padx=20, pady=10)
+                return
+        # PC goal
+        elif event["event"] == "pc" and event.get("result") == "goal":
+            if gs.waiting_assist[0]:
+                stats.add_stat(event["team"], "assist", quarter=info["quarter"], time=info["time"], player=player[0], position=player[3] if player[3] else None)
+                gs.waiting_assist[0] = False
+                if gs.selected_button[0]:
+                    gs.selected_button[0].config(bg="#B0A9A9")
+                if gs.active_frame[0]:
+                    gs.active_frame[0].config(highlightbackground="black", highlightthickness=2)
+                gs.selected_button[0] = None
+                gs.active_frame[0] = None
+                gs.selected_event[0] = None
+                return
+            else:
+                stats.add_stat(event["team"], "pc", quarter=info["quarter"], time=info["time"], result="goal", player=player[0], position=player[3] if player[3] else None)
+                event["score_label"].config(text=str(int(event["score_label"].cget("text")) + 1))
+                try:
+                    match_id = ss.get_match_id()
+                    if match_id:
+                        supabase.rpc("update_score", {
+                            "p_match_id": match_id,
+                            "p_team": event["team"]
+                        }).execute()
+                except Exception as e:
+                    print(f"Error updating score in database: {e}")
+
+                def on_yes():
+                    gs.waiting_assist[0] = True
+                    active = player_frame1 if event["team"] == "team1" else player_frame2
+                    active.config(highlightbackground="#FFD700", highlightthickness=5)
+                    gs.active_frame[0] = active
+                    popup.destroy()
+                
+                def on_no():
+                    gs.waiting_assist[0] = False
+                    if gs.selected_button[0]:
+                        gs.selected_button[0].config(bg="#B0A9A9")
+                    if gs.active_frame[0]:
+                        gs.active_frame[0].config(highlightbackground="black", highlightthickness=2)
+                    gs.selected_button[0] = None
+                    gs.active_frame[0] = None
+                    gs.selected_event[0] = None
+                    popup.destroy()
+                
+                popup = tk.Toplevel(root)
+                popup.title("Assist")
+                popup.geometry("300x150")
+                popup.resizable(False, False)
+                popup.grab_set()
+                popup.update_idletasks()
+                x = (popup.winfo_screenwidth() // 2) - 150
+                y = (popup.winfo_screenheight() // 2) - 75
+                popup.geometry(f"300x150+{x}+{y}")
+                tk.Label(popup, text="Was there an assist?", font=("Arial", 12)).pack(pady=20)
+                tk.Button(popup, text="Yes", font=("Arial", 10, "bold"), command=on_yes).pack(side="left", expand=True, padx=20, pady=10)
+                tk.Button(popup, text="No", font=("Arial", 10, "bold"), command=on_no).pack(side="right", expand=True, padx=20, pady=10)
+                return
+        elif event["event"] == "pc" and event.get("result") == "saved":
+            with open("teams_data.json") as f:
+                data = json.load(f)
+            opposing_players_key = "players_team1" if event["opposing_team"] == "team1" else "players_team2"
+            opposing_players = data.get(opposing_players_key, [])
+            gk = next((p for p in opposing_players if p[3].lower() == "gk" and p[4].lower() == "yes"), None)
+            stats.add_stat(event["opposing_team"], "pc", quarter=info["quarter"], time=info["time"], result="saved", player=gk[0] if gk else None, position="GK")
+            stats.add_stat(event["team"], "pc", quarter=info["quarter"], time=info["time"], result="shot on target", player=player[0], position=player[3] if player[3] else None)
         else:
-            stats.add_stat(event["team"], event["event"], quarter=info["quarter"], time=info["time"], result=event.get("result"), player=player[0])
+            stats.add_stat(event["team"], event["event"], quarter=info["quarter"], time=info["time"], result=event.get("result"), player=player[0], position=player[3] if player[3] else None)
 
         # Reset
         if gs.selected_button[0]:
-            gs.selected_button[0].config(bg="#B0A9A9")
+            gs.selected_button[0].config(bg="#B0A9A9", highlightthickness=2)
+        if gs.active_frame[0]:
+            gs.active_frame[0].config(highlightbackground="black", highlightthickness=2)
+        gs.active_frame[0] = None
         gs.selected_button[0] = None
         gs.selected_event[0] = None
 
@@ -131,7 +280,7 @@ def main():
 
         tk.Label(player_frame1, text="Players", font=("Arial", 14, "bold")).pack(pady=10)
         for p in p1:
-            if p[3].lower() == "yes" and p[1] and p[2]:
+            if p[4].lower() == "yes" and p[1] and p[2]:
                 tk.Button(player_frame1, text=f"{p[0]} - {p[1][0]}. {p[2]}", font=("Arial", 12, "bold"),
                     command=lambda pl=p: on_player_click(pl, "team1")).pack(pady=7)
         tk.Button(player_frame1, text="Subs", font=("Arial", 12, "bold"), bg="#B0A9A9",
@@ -139,7 +288,7 @@ def main():
 
         tk.Label(player_frame2, text="Players", font=("Arial", 14, "bold")).pack(pady=10)
         for p in p2:
-            if p[3].lower() == "yes" and p[1] and p[2]:
+            if p[4].lower() == "yes" and p[1] and p[2]:
                 tk.Button(player_frame2, text=f"{p[0]} - {p[1][0]}. {p[2]}", font=("Arial", 12, "bold"),
                     command=lambda pl=p: on_player_click(pl, "team2")).pack(pady=7)
         tk.Button(player_frame2, text="Subs", font=("Arial", 12, "bold"), bg="#B0A9A9",
@@ -154,21 +303,25 @@ def main():
 
 
     # Buttons team 1
-    tc.setup_goal(root, get_quarter_time, score1_label, "team1", 310)
-    tc.setup_shot(root, get_quarter_time, "team1", "team2", 310)
-    tc.setup_foul(root, get_quarter_time, "team1", 310)
-    tc.setup_pc(root, get_quarter_time, "team1", 310)
-    tc.setup_corner(root, get_quarter_time, "team1", 310)
+    tc.setup_goal(root, get_quarter_time, score1_label, "team1", 310, player_frame1, player_frame2)
+    tc.setup_shot(root, get_quarter_time, "team1", "team2", 310, player_frame1, player_frame2)
+    tc.setup_foul(root, get_quarter_time, "team1", 310, player_frame1, player_frame2)
+    tc.setup_pc(root, get_quarter_time, score1_label, "team1", "team2", 310, player_frame1, player_frame2)
+    tc.setup_corner(root, get_quarter_time, "team1", 310, player_frame1, player_frame2)
 
     # Buttons team 2
-    tc.setup_goal(root, get_quarter_time, score2_label, "team2", 1100)
-    tc.setup_shot(root, get_quarter_time, "team2", "team1", 1100)
-    tc.setup_foul(root, get_quarter_time, "team2", 1100)
-    tc.setup_pc(root, get_quarter_time, "team2", 1100)
-    tc.setup_corner(root, get_quarter_time, "team2", 1100)
+    tc.setup_goal(root, get_quarter_time, score2_label, "team2", 1100, player_frame1, player_frame2)
+    tc.setup_shot(root, get_quarter_time, "team2", "team1", 1100, player_frame1, player_frame2)
+    tc.setup_foul(root, get_quarter_time, "team2", 1100, player_frame1, player_frame2)
+    tc.setup_pc(root, get_quarter_time, score2_label, "team2", "team1", 1100, player_frame1, player_frame2)
+    tc.setup_corner(root, get_quarter_time, "team2", 1100, player_frame1, player_frame2)
 
     # Reset stats button (Temporary, for testing purposes)
-    tk.Button(root, text="Reset Stats", font=("Arial", 10, "bold"), bg="#FF6B6B", command=stats.reset_stats).place(x=700, y=750, width=100, height=40)
+    def reset_stats():
+        stats.reset_stats()
+        score1_label.config(text="0")
+        score2_label.config(text="0")
+    tk.Button(root, text="Reset Stats", font=("Arial", 10, "bold"), bg="#FF6B6B", command=reset_stats).place(x=700, y=750, width=100, height=40)
 
     root.mainloop()
 

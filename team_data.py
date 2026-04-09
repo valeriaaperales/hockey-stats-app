@@ -4,13 +4,15 @@ import subprocess
 import sys
 import os
 import json
+from database import supabase
+import session as ss
 
 def main():
     root = tk.Tk()
     root.title("Teams and players")
     root.state("zoomed")
 
-    columns = ("No", "First Name", "Last Name", "Starter")
+    columns = ("No", "First Name", "Last Name", "Position", "Starter")
 
     # Team 1
     tk.Label(root, text="Team 1  - ", font=("Arial", 18, "bold")).place(x=70, y=50)
@@ -33,12 +35,12 @@ def main():
 
     for i in range(8):
         tag = "even" if i % 2 == 0 else "odd"
-        table1.insert("", "end", values=("", "", "", ""), tags=(tag,))
+        table1.insert("", "end", values=("", "", "", "", ""), tags=(tag,))
 
     def add_player1():
         count = len(table1.get_children())
         tag = "even" if count % 2 == 0 else "odd"
-        table1.insert("", "end", values=("", "", "", ""), tags=(tag,))
+        table1.insert("", "end", values=("", "", "", "", ""), tags=(tag,))
 
     def remove_player1():
         selected = table1.selection()
@@ -66,12 +68,12 @@ def main():
 
     for i in range(8):
         tag = "even" if i % 2 == 0 else "odd"
-        table2.insert("", "end", values=("", "", "", ""), tags=(tag,))
+        table2.insert("", "end", values=("", "", "", "", ""), tags=(tag,))
 
     def add_player2():
         count = len(table2.get_children())
         tag = "even" if count % 2 == 0 else "odd"
-        table2.insert("", "end", values=("", "", "", ""), tags=(tag,))
+        table2.insert("", "end", values=("", "", "", "", ""), tags=(tag,))
 
     def remove_player2():
         selected = table2.selection()
@@ -88,9 +90,9 @@ def main():
         x, y, width, height = table.bbox(data, column)
         value = table.item(data, "values")[column_index]
 
-        if column_index == 3:  # Starter column
+        if column_index == 4:  # Starter column
             current_values = list(table.item(data, "values"))
-            current_values[3] = "No" if value == "Yes" else "Yes"
+            current_values[4] = "No" if value == "Yes" else "Yes"
             table.item(data, values=current_values)
         else:
             def validate_input(char, col_index):
@@ -190,6 +192,8 @@ def main():
         if len(valid_players2) < 8:
             messagebox.showwarning("Warning", "Team 2 must have at least 8 players with number, first name and last name valid.")
             return
+        
+        # Save data to JSON
         data = {
             "team1_name": team1_entry.get(),
             "team2_name": team2_entry.get(),
@@ -200,15 +204,62 @@ def main():
         }
         with open("teams_data.json", "w") as f:
             json.dump(data, f)
+
+        # Insert teams in Supabase
+        try:
+            def upsert_team(name, color):
+                existing = supabase.table("teams").select("id").eq("name", name).execute()
+                if existing.data:
+                    team_id = existing.data[0]["id"]
+                    supabase.table("teams").update({"color": color}).eq("id", team_id).execute()
+                else:
+                    response = supabase.table("teams").insert({"name": name, "color": color}).execute()
+                    team_id = response.data[0]["id"]
+                return team_id
+
+            def upsert_player(team_id, p):
+                existing = supabase.table("players").select("id").eq("team_id", team_id).eq("number", int(p[0])).execute()
+                if existing.data:
+                    supabase.table("players").update({
+                        "first_name": p[1],
+                        "last_name": p[2],
+                        "position": p[3],
+                        "starter": p[4] == "Yes"
+                    }).eq("id", existing.data[0]["id"]).execute()
+                else:
+                    supabase.table("players").insert({
+                        "team_id": team_id,
+                        "number": int(p[0]),
+                        "first_name": p[1],
+                        "last_name": p[2],
+                        "position": p[3],
+                        "starter": p[4] == "Yes"
+                    }).execute()
+
+            team1_id = upsert_team(team1_entry.get(), select1.get())
+            team2_id = upsert_team(team2_entry.get(), select2.get())
+
+            for p in valid_players1:
+                upsert_player(team1_id, p)
+
+            for p in valid_players2:
+                upsert_player(team2_id, p)
+
+            ss.save_teams_ids(team1_id, team2_id)
+
+        except Exception as e:
+            print(f"Error saving to database: {e}")
+            messagebox.showwarning("Warning", "Could not connect to Supabase. Data saved locally only.")
+            
         root.destroy()
         subprocess.Popen([sys.executable, "main.py"])
 
     # Buttons
-    addplayer1 = tk.Button(root, text="Add Player", font=("Arial", 10, "bold"), bg="#66B9F0", command=add_player1).place(x=525, y=600, width=105, height=46)
-    removeplayer1 = tk.Button(root, text="Remove Player", font=("Arial", 10, "bold"), bg="#F17272", command=remove_player1).place(x=525, y=650, width=105, height=46)
-    addplayer2 = tk.Button(root, text="Add Player", font=("Arial", 10, "bold"), bg="#66B9F0", command=add_player2).place(x=1355, y=600, width=105, height=46)
-    removeplayer2 = tk.Button(root, text="Remove Player", font=("Arial", 10, "bold"), bg="#F17272", command=remove_player2).place(x=1355, y=650, width=105, height=46)
-    saveteams = tk.Button(root, text="Save Teams", font=("Arial", 10, "bold"), bg="#8FE268", command=save_teams).place(x=660, y=720, width=120, height=70)
+    tk.Button(root, text="Add Player", font=("Arial", 10, "bold"), bg="#66B9F0", command=add_player1).place(x=525, y=600, width=105, height=46)
+    tk.Button(root, text="Remove Player", font=("Arial", 10, "bold"), bg="#F17272", command=remove_player1).place(x=525, y=650, width=105, height=46)
+    tk.Button(root, text="Add Player", font=("Arial", 10, "bold"), bg="#66B9F0", command=add_player2).place(x=1355, y=600, width=105, height=46)
+    tk.Button(root, text="Remove Player", font=("Arial", 10, "bold"), bg="#F17272", command=remove_player2).place(x=1355, y=650, width=105, height=46)
+    tk.Button(root, text="Save Teams", font=("Arial", 10, "bold"), bg="#8FE268", command=save_teams).place(x=660, y=720, width=120, height=70)
 
     root.mainloop()
 

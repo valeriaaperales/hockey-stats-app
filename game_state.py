@@ -2,3 +2,5 @@
 selected_event = [None]
 selected_button = [None]
 selected_time = [None]
+active_frame = [None]
+waiting_assist = [False]
