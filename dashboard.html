@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hockey Dashboard</title>
+</head>
+<body>
+    <h1>Hockey Statistics Dashboard</h1>
+
+    <div id="Scoreboard"></div>
+
+    <div>
+        <button onclick="showStats('statistics')">Statistics</button>
+        <button onclick="showStats('play')">Play-By-Play</button>
+    </div>
+    <div id="Statistics"></div>
+    <div id="PlayByPlay" style="display:none"></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <script>
+        const SUPABASE_URL = 'https://qduolufuqjgwkjusrich.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFkdW9sdWZ1cWpnd2tqdXNyaWNoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU0MjYyNTIsImV4cCI6MjA5MTAwMjI1Mn0.RiIVQOOZh3-IU2U9OZw2KR4zeFLpP2aqLxky410BGx0';
+
+        const { createClient } = supabase;
+        const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        let matchEvents = [];
+        let playerRegistry = {};
+
+        // Load matches
+        async function loadMatches() {
+            const {data, error} = await db
+                .from('matches')
+                .select('*, team1:teams!matches_team1_id_fkey(name), team2:teams!matches_team2_id_fkey(name)')
+                .order('id', {ascending: false})
+                .limit(1)
+                .single();
+
+            if (error || !data) {
+                document.getElementById('Scoreboard').textContent = 'No match found';
+                return;
+            }
+
+            const {data: lastEvent} = await db
+                .from('events')
+                .select('quarter')
+                .order('id', {ascending: false})
+                .limit(1)
+                .single();
+
+            const currentQuarter = lastEvent?.quarter || '-';
+
+            document.getElementById('Scoreboard').innerHTML = `
+                <div style="display:flex; justify-content:center; align-items:center; gap:40px; padding:20px;">
+                    <div style="font-size:32px; font-weight:bold;">${data.team1.name}</div>
+                    <div style="text-align:center;">
+                        <div style="font-size:48px; font-weight:bold;">${data.team1_score} - ${data.team2_score}</div>
+                        <div style="font-size:18px; color:grey;">${currentQuarter}</div>
+                    </div>
+                    <div style="font-size:32px; font-weight:bold;">${data.team2.name}</div>
+                </div>
+            `;
+        }
+        loadMatches();
+
+        // Load events
+        async function loadEvents() {
+            const {data, error} = await db
+                .from('events')
+                .select('*, players(number, first_name, last_name, position)')
+                .order('id', {ascending: true});
+
+            if (error || !data || data.length === 0) {
+                document.getElementById('PlayByPlay').textContent = 'No events found';
+                return;
+            }
+
+            const grouped = [];
+            const used = new Set();
+
+            data.forEach((ev, i) => {
+                if (used.has(i)) return;
+                if (ev.result === 'goal') {
+                    const assistIndex = data.findIndex((a, j) =>
+                        !used.has(j) &&
+                        a.event === 'assist' &&
+                        a.quarter === ev.quarter &&
+                        a.time === ev.time &&
+                        a.team_id === ev.team_id
+                    );
+                    if (assistIndex !== -1) {
+                        grouped.push({main: ev, assist: data[assistIndex], save: null});
+                        used.add(i);
+                        used.add(assistIndex);
+                    } else {
+                        grouped.push({main: ev, assist: null, save: null});
+                    }
+                } else if (ev.result === 'shot on target') {
+                    const saveIndex = data.findIndex((a, j) =>
+                        a.result === 'saved' &&
+                        a.quarter === ev.quarter &&
+                        a.time === ev.time
+                    );
+                    if (saveIndex !== -1) {
+                        grouped.push({main: ev, assist: null, save: data[saveIndex]});
+                        used.add(i);
+                        used.add(saveIndex);
+                    } else {
+                        grouped.push({main: ev, assist: null, save: null});
+                    }
+                } else if (ev.event !== 'assist' && ev.result !== 'saved') {
+                    grouped.push({main: ev, assist: null, save: null});
+                    used.add(i);
+                }
+            });
+
+            document.getElementById('PlayByPlay').innerHTML = grouped.reverse().map(({main: ev, assist, save}) => {
+                const player = ev.players ? `#${ev.players.number} ${ev.players.first_name[0]}. ${ev.players.last_name}` : '';
+                const assistStr = assist?.players ? ` (ASSIST: #${assist.players.number} ${assist.players.first_name[0]}. ${assist.players.last_name})` : '';
+                const saveStr = save?.players ? ` (SAVED: #${save.players.number} ${save.players.first_name[0]}. ${save.players.last_name})` : '';
+                const label = ev.result === 'goal' && ev.event === 'pc' ? 'PC GOAL'
+                    : ev.result === 'goal' ? 'GOAL'
+                    : ev.result === 'shot on target' && ev.event === 'pc' ? 'PC SHOT ON TARGET'
+                    : ev.result === 'shot on target' ? 'SHOT ON TARGET'
+                    : ev.result === 'miss' && ev.event === 'pc' ? 'PC MISSED'
+                    : ev.result === 'miss' ? 'SHOT MISSED'
+                    : ev.event === 'foul' ? 'FOUL'
+                    : ev.event === 'pc' ? 'PC'
+                    : ev.event === 'corner' ? 'CORNER'
+                    : `${ev.event.toUpperCase()}${ev.result ? ' (' + ev.result + ')' : ''}`;
+                return `<p>${ev.quarter} ${ev.time} - ${label} ${player}${assistStr}${saveStr}</p>`;
+            }).join('');
+        }
+        loadEvents();
+
+        // Load team stats
+        async function loadTeamView(quarterFilter = null) {
+            const {data: match} = await db
+                .from('matches')
+                .select('*, team1:teams!matches_team1_id_fkey(name), team2:teams!matches_team2_id_fkey(name)')
+                .order('id', {ascending: false})
+                .limit(1)
+                .single();
+
+            if (!match) return;
+
+            const {data: events} = await db
+                .from('events')
+                .select('*')
+                .eq('match_id', match.id);
+
+            if (!events) return;
+
+            const {data: players1} = await db.from('players').select('*').eq('team_id', match.team1_id);
+            const {data: players2} = await db.from('players').select('*').eq('team_id', match.team2_id);
+            const allPlayers = [...(players1 || []), ...(players2 || [])];
+
+            function compute(teamId, quarter = null) {
+                let e = events.filter(ev => ev.team_id === teamId);
+                if (quarter) e = e.filter(ev => ev.quarter === quarter);
+                const goals = e.filter(ev => ev.result === 'goal').length;
+                const shots = e.filter(ev => ev.event === 'shot' && ev.result !== 'saved').length;
+                const shotsOnTarget = e.filter(ev => ev.result === 'shot on target' || ev.result === 'goal').length;
+                const shotsMissed = e.filter(ev => ev.result === 'miss').length;
+                const saves = e.filter(ev => ev.result === 'saved').length;
+                const pcs = e.filter(ev => ev.event === 'pc').length;
+                const pcGoals = e.filter(ev => ev.event === 'pc' && ev.result === 'goal').length;
+                const corners = e.filter(ev => ev.event === 'corner').length;
+                const fouls = e.filter(ev => ev.event === 'foul').length;
+                const shotsConceded = events.filter(ev => ev.team_id !== teamId && (ev.result === 'shot on target' || ev.result === 'goal')).length;
+                return {
+                    goals, shots, shotsOnTarget, shotsMissed, saves, pcs, pcGoals, corners, fouls, shotsConceded,
+                    shotAccuracy: shots > 0 ? Math.round((shotsOnTarget / shots) * 100) : 0,
+                    shotEfficiency: shots > 0 ? Math.round((goals / shots) * 100) : 0,
+                    pcConversion: pcs > 0 ? Math.round((pcGoals / pcs) * 100) : 0,
+                    savePercentage: shotsConceded > 0 ? Math.round((saves / shotsConceded) * 100) : 0,
+                };
+            }
+
+            const t1 = compute(match.team1_id, quarterFilter);
+            const t2 = compute(match.team2_id, quarterFilter);
+
+            function getPlayersBreakdown(teamId, stat)  {
+                const teamPlayers = allPlayers.filter(p => p.team_id === teamId);
+                return teamPlayers
+                    .map(p => {
+                        const pe = events.filter(ev => ev.player_id === p.id);
+                        let count = 0;
+                        if (stat === 'goals') count = pe.filter(ev => ev.result === 'goal').length;
+                        if (stat === 'shots') count = pe.filter(ev => (ev.event === 'shot' || ev.event === 'pc') && ev.result !== 'saved').length;
+                        if (stat === 'saves') count = pe.filter(ev => ev.result === 'saved').length;
+                        if (stat === 'pcs') count = pe.filter(ev => ev.event === 'pc').length;
+                        if (stat === 'shotsOnTarget') count = pe.filter(ev => ev.result === 'shot on target' || ev.result === 'goal').length;
+                        return count > 0 ? `${p.first_name[0]}. ${p.last_name}: ${count}` : null;
+                    })
+                    .filter(Boolean)
+                    .join('\n');
+            }
+
+            function renderTeamTable(s, teamName) {
+                return `
+                    <h3>${teamName}</h3>
+                    <table border="1">
+                        <thead><tr><th>Stat</th><th>Value</th><th>Ratio</th><th>%</th></tr></thead>
+                        <tbody>
+                            <tr><td>Goals</td><td>${s.goals}</td><td>-</td><td>-</td></tr>
+                            <tr><td>Shots</td><td>${s.shots}</td><td>-</td><td>-</td></tr>
+                            <tr><td>Shots on Target</td><td>${s.shotsOnTarget}</td><td>${s.shotsOnTarget}/${s.shots}</td><td>${s.shotAccuracy}%</td></tr>
+                            <tr><td>Shots Missed</td><td>${s.shotsMissed}</td><td>-</td><td>-</td></tr>
+                            <tr><td>Shot Efficiency</td><td>-</td><td>${s.goals}/${s.shots}</td><td>${s.shotEfficiency}%</td></tr>
+                            <tr><td>Saves</td><td>${s.saves}</td><td>${s.saves}/${s.shotsConceded}</td><td>${s.savePercentage}%</td></tr>
+                            <tr><td>Penalty Corners</td><td>${s.pcs}</td><td>-</td><td>-</td></tr>
+                            <tr><td>PC Conversion</td><td>-</td><td>${s.pcGoals}/${s.pcs}</td><td>${s.pcConversion}%</td></tr>
+                            <tr><td>Corners</td><td>${s.corners}</td><td>-</td><td>-</td></tr>
+                            <tr><td>Fouls</td><td>${s.fouls}</td><td>-</td><td>-</td></tr>
+                        </tbody>
+                    </table>
+                `;
+            }
+
+            document.getElementById('StatTeam').innerHTML = `
+                <div>
+                    <button onclick="filterQuarter('all')">Total</button>
+                    <button onclick="filterQuarter('1st')">1st</button>
+                    <button onclick="filterQuarter('2nd')">2nd</button>
+                    <button onclick="filterQuarter('3rd')">3rd</button>
+                    <button onclick="filterQuarter('4th')">4th</button>
+                </div>
+                <div>
+                    <button onclick="showTeamView('team1')">${match.team1.name}</button>
+                    <button onclick="showTeamView('team2')">${match.team2.name}</button>
+                </div>
+                <canvas id="teamChart" width="100" height="30"></canvas>
+                <div id="Team1View">${renderTeamTable(t1, match.team1.name)}</div>
+                <div id="Team2View" style="display:none">${renderTeamTable(t2, match.team2.name)}</div>
+            `;
+
+            const ctx = document.getElementById('teamChart').getContext('2d');
+            new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: ['Goals', 'Shots', 'Shots on target', 'PC', 'Saves'],
+                    datasets: [
+                        {label: match.team1.name, data: [t1.goals, t1.shots, t1.shotsOnTarget, t1.pcs, t1.saves], backgroundColor: 'rgba(54, 162, 235, 0.6)'},
+                        {label: match.team2.name, data: [t2.goals, t2.shots, t2.shotsOnTarget, t2.pcs, t2.saves], backgroundColor: 'rgba(255, 99, 132, 0.6)'},
+                    ]
+                },
+                options: {responsive: true, plugins: 
+                    {title: {display:true, text: 'Team Comparison'},
+                    tooltip: {callbacks: {
+                        afterBody: function(context) {
+                            const label = context[0].label;
+                            const datasetLabel = context[0].dataset.label;
+                            const teamId = datasetLabel === match.team1.name ? match.team1_id : match.team2_id;
+                            const statMap = {
+                                'Goals': 'goals',
+                                'Shots' : 'shots',
+                                'Shots on target' : 'shotsOnTarget',
+                                'PC' : 'pcs',
+                                'Saves' : 'saves'
+                            };
+                            const stat = statMap[label];
+                            if (!stat) return '';
+                            return getPlayersBreakdown(teamId, stat);
+                        }
+                    }}
+                }}
+            });
+        }
+
+        function filterQuarter(quarter) {
+                loadTeamView(quarter === 'all' ? null : quarter);
+        }
+        // Load individual stats
+        async function loadPlayerView() {
+            const {data: match} = await db
+                .from('matches')
+                .select('*, team1:teams!matches_team1_id_fkey(name), team2:teams!matches_team2_id_fkey(name)')
+                .order('id', {ascending: false})
+                .limit(1)
+                .single();
+
+            if (!match) return;
+
+            const {data: events} = await db
+                .from('events')
+                .select('*, players(id, number, first_name, last_name, position, team_id)')
+                .eq('match_id', match.id);
+
+            if (!events) return;
+
+            matchEvents = events;
+
+            const {data: players1} = await db.from('players').select('*').eq('team_id', match.team1_id);
+            const {data: players2} = await db.from('players').select('*').eq('team_id', match.team2_id);
+
+            function buildPlayerStats(players, teamId) {
+                return players.map(p => {
+                    players.forEach(p => playerRegistry[p.id] = p);
+                    const pe = events.filter(ev => ev.player_id === p.id);
+                    const goals = pe.filter(ev => ev.result === 'goal').length;
+                    const assists = pe.filter(ev => ev.event === 'assist').length;
+                    const shots = pe.filter(ev => (ev.event === 'shot' || ev.event === 'pc') && ev.result !== 'saved').length;
+                    const shotsOnTarget = pe.filter(ev => ev.result === 'shot on target').length;
+                    const saves = pe.filter(ev => ev.result === 'saved').length;
+                    const shotAccuracy = shots > 0 ? Math.round((shotsOnTarget / shots) * 100) : 0;
+                    const shotEfficiency = shots > 0 ? Math.round((goals / shots) * 100) : 0;
+                    return {...p, goals, assists, shots, shotsOnTarget, saves, shotAccuracy, shotEfficiency};
+                });
+            }
+
+
+            function renderPlayerTable(playerStats, containerId) {
+                return `
+                    <div id="PlayerChart_${containerId}" style="margin-bottom:20px"></div>
+                    <table border="1">
+                        <thead>
+                            <tr><th>#</th><th>Player</th><th>Pos</th><th>Goals</th><th>Assists</th><th>Shots</th><th>On Target</th><th>Accuracy</th><th>Efficiency</th><th>Saves</th></tr>
+                        </thead>
+                        <tbody>
+                            ${playerStats.sort((a,b) => b.goals - a.goals).map(p => `
+                                <tr style="cursor:pointer" onclick="showPlayerChart(${p.id}, ${p.goals}, ${p.assists}, ${p.shots}, ${p.shotsOnTarget}, ${p.saves}, '${containerId}')">
+                                    <td>${p.number}</td>
+                                    <td>${p.first_name[0]}. ${p.last_name}</td>
+                                    <td>${p.position || '-'}</td>
+                                    <td>${p.goals}</td>
+                                    <td>${p.assists}</td>
+                                    <td>${p.shots}</td>
+                                    <td>${p.shotsOnTarget}</td>
+                                    <td>${p.shotAccuracy}%</td>
+                                    <td>${p.shotEfficiency}%</td>
+                                    <td>${p.saves}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                `;
+            }
+
+            const stats1 = buildPlayerStats(players1 || [], match.team1_id);
+            const stats2 = buildPlayerStats(players2 || [], match.team2_id);
+
+            players1.forEach(p => playerRegistry[p.id] = p);
+            players2.forEach(p => playerRegistry[p.id] = p);
+
+            document.getElementById('StatPlayers').innerHTML = `
+                <div>
+                    <button onclick="showPlayerView('team1')">${match.team1.name}</button>
+                    <button onclick="showPlayerView('team2')">${match.team2.name}</button>
+                </div>
+                <div id="Team1PlayerView">${renderPlayerTable(stats1, 'Team1PlayerView')}</div>
+                <div id="Team2PlayerView">${renderPlayerTable(stats2, 'Team2PlayerView')}</div>
+            `;
+        }
+
+        function initStatistics() {
+            document.getElementById('Statistics').innerHTML = `
+                <div>
+                    <button onclick="showStatsTab('team')">Team</button>
+                    <button onclick="showStatsTab('players')">Players</button>
+                </div>
+                <div id="StatTeam"></div>
+                <div id="StatPlayers" style="display:none"></div>
+            `;
+            loadTeamView();
+            loadPlayerView();
+        }
+        initStatistics();
+
+        // Player chart
+        function showPlayerChart(id, goals, assists, shots, shotsOnTarget, saves, containerId) {
+            const p = playerRegistry[id];
+            if (!p) return;
+            const name = `${p.first_name[0]}. ${p.last_name}`;
+
+            document.getElementById('PlayerChart_' + containerId).innerHTML = `
+                <h3>${name}</h3>
+                <canvas id="playerChartCanvas_${containerId}" width="100" height="20"></canvas>
+            `;
+
+            const ctx = document.getElementById('playerChartCanvas_' + containerId).getContext('2d');
+            new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: ['Goals', 'Assists', 'Shots', 'On Target', 'Saves'],
+                    datasets: [{
+                        label: name,
+                        data: [goals, assists, shots, shotsOnTarget, saves],
+                        backgroundColor: 'rgba(54, 162, 235, 0.6)'
+                    }]
+                },
+                options: {responsive: true, plugins: {title: {display: true, text: `${name} Stats`}}}
+            });
+        }
+
+        // Tabs
+        function showStats(tab) {
+            document.getElementById('Statistics').style.display = tab === 'statistics' ? 'block' : 'none';
+            document.getElementById('PlayByPlay').style.display = tab === 'play' ? 'block' : 'none';
+        }
+
+        function showStatsTab(tab) {
+            document.getElementById('StatTeam').style.display = tab === 'team' ? 'block' : 'none';
+            document.getElementById('StatPlayers').style.display = tab === 'players' ? 'block' : 'none';
+            document.getElementById('StatAnalytics').style.display = tab === 'analytics' ? 'block' : 'none';
+        }
+
+        function showTeamView(team) {
+            document.getElementById('Team1View').style.display = team === 'team1' ? 'block' : 'none';
+            document.getElementById('Team2View').style.display = team === 'team2' ? 'block' : 'none';
+        }
+
+        function showPlayerView(team) {
+            document.getElementById('Team1PlayerView').style.display = team === 'team1' ? 'block' : 'none';
+            document.getElementById('Team2PlayerView').style.display = team === 'team2' ? 'block' : 'none';
+        }
+
+        // Realtime
+        db.channel('matches')
+            .on('postgres_changes', {event: '*', schema: 'public', table: 'matches'}, () => {
+                loadMatches();
+            })
+            .subscribe();
+
+        db.channel('events')
+            .on('postgres_changes', {event: '*', schema: 'public', table: 'events'}, () => {
+                setTimeout(loadEvents, 2000);
+                setTimeout(initStatistics, 2000);
+            })
+            .subscribe();
+
+    </script>
+</body>
+</html>
