@@ -29,6 +29,7 @@
 
         let matchEvents = [];
         let playerRegistry = {};
+        let teamChart = null;
 
         // Load matches
         async function loadMatches() {
@@ -165,6 +166,7 @@
                 const shots = e.filter(ev => ev.event === 'shot' && ev.result !== 'saved').length;
                 const shotsOnTarget = e.filter(ev => ev.result === 'shot on target' || ev.result === 'goal').length;
                 const shotsMissed = e.filter(ev => ev.result === 'miss').length;
+                const assists = e.filter(ev => ev.event ==='assist').length;
                 const saves = e.filter(ev => ev.result === 'saved').length;
                 const pcs = e.filter(ev => ev.event === 'pc').length;
                 const pcGoals = e.filter(ev => ev.event === 'pc' && ev.result === 'goal').length;
@@ -172,7 +174,7 @@
                 const fouls = e.filter(ev => ev.event === 'foul').length;
                 const shotsConceded = events.filter(ev => ev.team_id !== teamId && (ev.result === 'shot on target' || ev.result === 'goal')).length;
                 return {
-                    goals, shots, shotsOnTarget, shotsMissed, saves, pcs, pcGoals, corners, fouls, shotsConceded,
+                    goals, assists, shots, shotsOnTarget, shotsMissed, saves, pcs, pcGoals, corners, fouls, shotsConceded,
                     shotAccuracy: shots > 0 ? Math.round((shotsOnTarget / shots) * 100) : 0,
                     shotEfficiency: shots > 0 ? Math.round((goals / shots) * 100) : 0,
                     pcConversion: pcs > 0 ? Math.round((pcGoals / pcs) * 100) : 0,
@@ -191,6 +193,7 @@
                         let count = 0;
                         if (stat === 'goals') count = pe.filter(ev => ev.result === 'goal').length;
                         if (stat === 'shots') count = pe.filter(ev => (ev.event === 'shot' || ev.event === 'pc') && ev.result !== 'saved').length;
+                        if (stat === 'assists') count = pe.filter(ev => ev.event === 'assist').length;
                         if (stat === 'saves') count = pe.filter(ev => ev.result === 'saved').length;
                         if (stat === 'pcs') count = pe.filter(ev => ev.event === 'pc').length;
                         if (stat === 'shotsOnTarget') count = pe.filter(ev => ev.result === 'shot on target' || ev.result === 'goal').length;
@@ -203,49 +206,53 @@
             function renderTeamTable(s, teamName) {
                 return `
                     <h3>${teamName}</h3>
-                    <table border="1">
-                        <thead><tr><th>Stat</th><th>Value</th><th>Ratio</th><th>%</th></tr></thead>
-                        <tbody>
-                            <tr><td>Goals</td><td>${s.goals}</td><td>-</td><td>-</td></tr>
-                            <tr><td>Shots</td><td>${s.shots}</td><td>-</td><td>-</td></tr>
-                            <tr><td>Shots on Target</td><td>${s.shotsOnTarget}</td><td>${s.shotsOnTarget}/${s.shots}</td><td>${s.shotAccuracy}%</td></tr>
-                            <tr><td>Shots Missed</td><td>${s.shotsMissed}</td><td>-</td><td>-</td></tr>
-                            <tr><td>Shot Efficiency</td><td>-</td><td>${s.goals}/${s.shots}</td><td>${s.shotEfficiency}%</td></tr>
-                            <tr><td>Saves</td><td>${s.saves}</td><td>${s.saves}/${s.shotsConceded}</td><td>${s.savePercentage}%</td></tr>
-                            <tr><td>Penalty Corners</td><td>${s.pcs}</td><td>-</td><td>-</td></tr>
-                            <tr><td>PC Conversion</td><td>-</td><td>${s.pcGoals}/${s.pcs}</td><td>${s.pcConversion}%</td></tr>
-                            <tr><td>Corners</td><td>${s.corners}</td><td>-</td><td>-</td></tr>
-                            <tr><td>Fouls</td><td>${s.fouls}</td><td>-</td><td>-</td></tr>
-                        </tbody>
-                    </table>
+                    <div style="display:flex; gap:20px;">
+                        <div style="flex:1">    
+                            <table border="1" style="width:100%">
+                                <thead><tr><th>Stat</th><th>Value</th></tr></thead>
+                                <tbody>
+                                    <tr><td>Goals</td><td>${s.goals}</td></tr>
+                                    <tr><td>Shots</td><td>${s.shots}</td></tr>
+                                    <tr><td>Shots on Target</td><td>${s.shotsOnTarget}</td></tr>
+                                    <tr><td>Shots Missed</td><td>${s.shotsMissed}</td></tr>
+                                    <tr><td>Assists</td><td>${s.assists}</td></tr>
+                                    <tr><td>Saves</td><td>${s.saves}</td></tr>
+                                    <tr><td>Penalty Corners</td><td>${s.pcs}</td></tr>
+                                    <tr><td>Corners</td><td>${s.corners}</td></tr>
+                                    <tr><td>Fouls</td><td>${s.fouls}</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <div style="flex:1">
+                            <table border="1" style="width:100%">
+                                <thead><tr><th>Stat</th><th>Ratio</th><th>%</th></tr></thead>
+                                <tbody>
+                                    <tr><td>Shot Accuracy</td><td>${s.shotsOnTarget}/${s.shots}</td><td>${s.shotAccuracy}%</td></tr>
+                                    <tr><td>Shot Efficiency</td><td>${s.goals}/${s.shots}</td><td>${s.shotEfficiency}%</td></tr>
+                                    <tr><td>PC Conversion</td><td>${s.pcGoals}/${s.pcs}</td><td>${s.pcConversion}%</td></tr>
+                                    <tr><td>Save %</td><td>${s.saves}/${s.shotsConceded}</td><td>${s.savePercentage}%</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
                 `;
             }
 
-            document.getElementById('StatTeam').innerHTML = `
-                <div>
-                    <button onclick="filterQuarter('all')">Total</button>
-                    <button onclick="filterQuarter('1st')">1st</button>
-                    <button onclick="filterQuarter('2nd')">2nd</button>
-                    <button onclick="filterQuarter('3rd')">3rd</button>
-                    <button onclick="filterQuarter('4th')">4th</button>
-                </div>
-                <div>
-                    <button onclick="showTeamView('team1')">${match.team1.name}</button>
-                    <button onclick="showTeamView('team2')">${match.team2.name}</button>
-                </div>
-                <canvas id="teamChart" width="100" height="30"></canvas>
-                <div id="Team1View">${renderTeamTable(t1, match.team1.name)}</div>
-                <div id="Team2View" style="display:none">${renderTeamTable(t2, match.team2.name)}</div>
-            `;
+            document.getElementById('btnTeam1').textContent = match.team1.name;
+            document.getElementById('btnTeam2').textContent = match.team2.name;
+            document.getElementById('Team1View').innerHTML = renderTeamTable(t1, match.team1.name);
+            document.getElementById('Team2View').innerHTML = renderTeamTable(t2, match.team2.name);
+
+            if (teamChart) teamChart.destroy();
 
             const ctx = document.getElementById('teamChart').getContext('2d');
-            new Chart(ctx, {
+            teamChart = new Chart(ctx, {
                 type: 'bar',
                 data: {
-                    labels: ['Goals', 'Shots', 'Shots on target', 'PC', 'Saves'],
+                    labels: ['Goals', 'Assists', 'Shots', 'Shots on target', 'PC', 'Saves'],
                     datasets: [
-                        {label: match.team1.name, data: [t1.goals, t1.shots, t1.shotsOnTarget, t1.pcs, t1.saves], backgroundColor: 'rgba(54, 162, 235, 0.6)'},
-                        {label: match.team2.name, data: [t2.goals, t2.shots, t2.shotsOnTarget, t2.pcs, t2.saves], backgroundColor: 'rgba(255, 99, 132, 0.6)'},
+                        {label: match.team1.name, data: [t1.goals, t1.assists, t1.shots, t1.shotsOnTarget, t1.pcs, t1.saves], backgroundColor: 'rgba(54, 162, 235, 0.6)'},
+                        {label: match.team2.name, data: [t2.goals, t2.assists, t2.shots, t2.shotsOnTarget, t2.pcs, t2.saves], backgroundColor: 'rgba(255, 99, 132, 0.6)'},
                     ]
                 },
                 options: {responsive: true, plugins: 
@@ -257,6 +264,7 @@
                             const teamId = datasetLabel === match.team1.name ? match.team1_id : match.team2_id;
                             const statMap = {
                                 'Goals': 'goals',
+                                'Assists': 'assists',
                                 'Shots' : 'shots',
                                 'Shots on target' : 'shotsOnTarget',
                                 'PC' : 'pcs',
@@ -346,28 +354,46 @@
             players1.forEach(p => playerRegistry[p.id] = p);
             players2.forEach(p => playerRegistry[p.id] = p);
 
-            document.getElementById('StatPlayers').innerHTML = `
-                <div>
-                    <button onclick="showPlayerView('team1')">${match.team1.name}</button>
-                    <button onclick="showPlayerView('team2')">${match.team2.name}</button>
-                </div>
-                <div id="Team1PlayerView">${renderPlayerTable(stats1, 'Team1PlayerView')}</div>
-                <div id="Team2PlayerView">${renderPlayerTable(stats2, 'Team2PlayerView')}</div>
-            `;
+            document.getElementById('btnPlayer1').textContent = match.team1.name;
+            document.getElementById('btnPlayer2').textContent = match.team2.name;
+            document.getElementById('Team1PlayerView').innerHTML = renderPlayerTable(stats1, 'Team1PlayerView');
+            document.getElementById('Team2PlayerView').innerHTML = renderPlayerTable(stats2, 'Team2PlayerView');
         }
 
         function initStatistics() {
-            document.getElementById('Statistics').innerHTML = `
+        document.getElementById('Statistics').innerHTML = `
+            <div>
+                <button onclick="showStatsTab('team')">Team</button>
+                <button onclick="showStatsTab('players')">Players</button>
+            </div>
+            <div id="StatTeam">
                 <div>
-                    <button onclick="showStatsTab('team')">Team</button>
-                    <button onclick="showStatsTab('players')">Players</button>
+                    <button onclick="filterQuarter('all')">Total</button>
+                    <button onclick="filterQuarter('1st')">1st</button>
+                    <button onclick="filterQuarter('2nd')">2nd</button>
+                    <button onclick="filterQuarter('3rd')">3rd</button>
+                    <button onclick="filterQuarter('4th')">4th</button>
                 </div>
-                <div id="StatTeam"></div>
-                <div id="StatPlayers" style="display:none"></div>
-            `;
-            loadTeamView();
-            loadPlayerView();
-        }
+                <div>
+                    <button onclick="showTeamView('team1')" id="btnTeam1"></button>
+                    <button onclick="showTeamView('team2')" id="btnTeam2"></button>
+                </div>
+                <canvas id="teamChart" width="100" height="30"></canvas>
+                <div id="Team1View"></div>
+                <div id="Team2View" style="display:none"></div>
+            </div>
+            <div id="StatPlayers" style="display:none">
+                <div>
+                    <button onclick="showPlayerView('team1')" id="btnPlayer1"></button>
+                    <button onclick="showPlayerView('team2')" id="btnPlayer2"></button>
+                </div>
+                <div id="Team1PlayerView"></div>
+                <div id="Team2PlayerView" style="display:none"></div>
+            </div>
+        `;
+        loadTeamView();
+        loadPlayerView();
+    }
         initStatistics();
 
         // Player chart
@@ -405,7 +431,7 @@
         function showStatsTab(tab) {
             document.getElementById('StatTeam').style.display = tab === 'team' ? 'block' : 'none';
             document.getElementById('StatPlayers').style.display = tab === 'players' ? 'block' : 'none';
-            document.getElementById('StatAnalytics').style.display = tab === 'analytics' ? 'block' : 'none';
+
         }
 
         function showTeamView(team) {
@@ -427,8 +453,13 @@
 
         db.channel('events')
             .on('postgres_changes', {event: '*', schema: 'public', table: 'events'}, () => {
-                setTimeout(loadEvents, 2000);
-                setTimeout(initStatistics, 2000);
+                setTimeout(() => {
+                    requestAnimationFrame(() => {
+                        loadEvents();
+                        loadTeamView();
+                        loadPlayerView();
+                    });
+                }, 2000);
             })
             .subscribe();
 
