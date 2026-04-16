@@ -17,7 +17,7 @@ def setup_goal(root, get_quarter_time, score_label, team_id, x_pos, frame_1, fra
         gs.active_frame[0] = active
 
     goal = tk.Button(root, text="Goal", font=("Arial", 12, "bold"), command=add_goal, bg="#B0A9A9")
-    goal.place(x=x_pos, y=280, width=100, height=80)
+    goal.place(x=x_pos, y=210, width=100, height=80)
 
 # Shot
 def setup_shot(root, get_quarter_time, team_id, opposing_team_id, x_pos, frame_1, frame_2):
@@ -65,7 +65,7 @@ def setup_shot(root, get_quarter_time, team_id, opposing_team_id, x_pos, frame_1
         tk.Button(popup, text="Saved", font=("Arial", 10), command=select_save).pack(pady=5)
 
     shot = tk.Button(root, text="Shot", font=("Arial", 12, "bold"), command=add_shot, bg="#B0A9A9")
-    shot.place(x=x_pos, y=380, width=100, height=80)
+    shot.place(x=x_pos, y=310, width=100, height=80)
 
 # Foul
 def setup_foul(root, get_quarter_time, team_id, x_pos, frame_1, frame_2):
@@ -83,7 +83,7 @@ def setup_foul(root, get_quarter_time, team_id, x_pos, frame_1, frame_2):
         gs.active_frame[0] = active
 
     foul = tk.Button(root, text="Foul", font=("Arial", 12, "bold"), command=add_foul, bg="#B0A9A9")
-    foul.place(x=x_pos, y=480, width=100, height=80)
+    foul.place(x=x_pos, y=410, width=100, height=80)
 
 # PC
 def setup_pc(root, get_quarter_time, score_label, team_id, opposing_team_id, x_pos, frame_1, frame_2):
@@ -160,7 +160,7 @@ def setup_pc(root, get_quarter_time, score_label, team_id, opposing_team_id, x_p
         tk.Button(popup, text="Another PC", font=("Arial", 10), command=select_another_pc).pack(pady=5)
 
     pc = tk.Button(root, text="PC", font=("Arial", 12, "bold"), command=add_pc, bg="#B0A9A9")
-    pc.place(x=x_pos, y=580, width=100, height=80)
+    pc.place(x=x_pos, y=510, width=100, height=80)
 
 # Corner
 def setup_corner(root, get_quarter_time, team_id, x_pos, frame_1, frame_2):
@@ -177,4 +177,20 @@ def setup_corner(root, get_quarter_time, team_id, x_pos, frame_1, frame_2):
         stats.add_stat(team_id, "corner", quarter=info["quarter"], time=info["time"])
 
     corner = tk.Button(root, text="Corner", font=("Arial", 12, "bold"), command=add_corner, bg="#B0A9A9")
-    corner.place(x=x_pos, y=680, width=100, height=80)
+    corner.place(x=x_pos, y=610, width=100, height=80)
+
+def setup_entry(root, get_quarter_time, team_id, x_pos, frame_1, frame_2):
+    def add_entry():
+        if gs.selected_button[0]:
+            gs.selected_button[0].config(bg="#B0A9A9")
+        if gs.active_frame[0]:
+            gs.active_frame[0].config(highlightbackground="black")
+        gs.selected_button[0] = None
+        gs.active_frame[0] = None
+
+        info = get_quarter_time()
+        import stats
+        stats.add_stat(team_id, "entry", quarter=info["quarter"], time=info["time"])
+
+    entry = tk.Button(root, text="Circle Entry", font=("Arial", 12, "bold"), command=add_entry, bg="#B0A9A9")
+    entry.place(x=x_pos, y=710, width=100, height=80)

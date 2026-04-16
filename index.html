@@ -3,19 +3,168 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Hockey Dashboard</title>
+    <title>Field Hockey Dashboard</title>
+    <style>
+        * {
+            margin:0;
+            padding:0;
+            box-sizing: border-box;;
+        }
+
+        body {
+            font-family: 'Seguo UI', sans-serif;
+            background: #f8f9fa;
+            color: #1b1b1b
+        }
+
+        h1 {
+            text-align: center;
+            padding: 20px;
+            font-size: 40px;
+            color: #1d3557;
+            border-bottom: 4px solid #dee2e6;
+            background: #ffffff;
+        }
+
+        /*Style navigation buttons*/
+        .nav {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            padding: 16px;
+            background: #ffffff;
+            border-bottom: 1px solid #dee2e6;
+        }
+
+        .nav button {
+            padding: 8px 24px;
+            border: 3px solid #dee2e6;
+            border-radius: 20px;
+            background: #ffffff;
+            color: #6c757d;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+
+        .nav button:hover {
+            font-size: 18px;
+            background: #f8f9fa;
+            color: #1d3557;
+        }
+
+        .nav button.active {
+            background: #1d3557;
+            color: #ffffff;
+            border-color: #1d3557;
+        }
+
+        /*Style main content*/
+        #Statistics, #PlayBYPlay {
+            max-width: 1300px;
+            margin: 24px auto;
+            padding:0 24px;
+        }
+
+        #Statistics > div:first-child {
+            display: flex;
+            justify-content: center;
+            padding: 16px 0;
+            gap: 8px;
+        }
+
+        #StatTeam > div:not(#Team1View):not(#Team2View),
+        #StatPlayers > div:not(#Team1PlayerView):not(#Team2PlayerView) {
+            display: flex;
+            justify-content: center;
+            padding: 12px 0;
+            gap: 8px;
+        }
+        
+        /*Style tables*/
+        table {
+            border-collapse: collapse;
+            border: 6px solid #c5c4c4;
+        }
+
+        th{
+            background: #1d3557;
+            color: #ffffff;
+            padding: 12px 16px;
+            border: 4px solid #c5c4c4;
+            text-align: center;
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        td {
+            padding: 10px 16px;
+            border-bottom: 4px solid #c5c4c4;
+            border: 4px solid #c5c4c4;
+            text-align: center;
+            font-size: 14px;
+        }
+
+        tr:hover td {
+            background: #d8dce0;
+        }
+
+        /*Style stat buttons (quarter filter, team, players)*/
+        .stat-btn {
+            padding: 6px 16px;
+            border: 3px solid #dee2e6;
+            border-radius: 16px;
+            background: #ffffff;
+            color: #6c757d;
+            cursor: pointer;
+            font-size: 13px;
+            margin: 4px;
+            transition: all 0.2s;
+        }
+
+        .stat-btn:hover {
+            font-size: 18px;
+            background: #f8f9fa;
+            color: #1d3557;
+        }
+
+        .stat-btn.active {
+            background: #1d3557;
+            color: #ffffff;
+            border-color: #1d3557;
+        }
+
+        /*Style scoreboard*/
+        #Scoreboard {
+            background: #ffffff;
+            border-bottom: 1px solid #dee2e6;
+            padding: 8px 0;
+        }
+
+    </style>
 </head>
 <body>
-    <h1>Hockey Statistics Dashboard</h1>
+    <h1>Field Hockey Statistics Dashboard</h1>
 
     <div id="Scoreboard"></div>
 
-    <div>
-        <button onclick="showStats('statistics')">Statistics</button>
-        <button onclick="showStats('play')">Play-By-Play</button>
+    <div class="nav">
+        <button class="active" onclick="showStats('statistics', this)">Statistics</button>
+        <button onclick="showStats('play', this)">Play-By-Play</button>
+        <button onclick="showStats('past', this)">Past Matches</button>
     </div>
     <div id="Statistics"></div>
-    <div id="PlayByPlay" style="display:none"></div>
+    <div id="PlayByPlay" style="display:none">
+        <div id="PlayByPlayButtons" style="display:flex; justify-content:center; padding:16px 0; gap:8px;">
+            <button class="stat-btn active" onclick="filterPlayByPlay('all', this)">Total</button>
+            <button class="stat-btn" onclick="filterPlayByPlay('1st', this)">1st</button>
+            <button class="stat-btn" onclick="filterPlayByPlay('2nd', this)">2nd</button>
+            <button class="stat-btn" onclick="filterPlayByPlay('3rd', this)">3rd</button>
+            <button class="stat-btn" onclick="filterPlayByPlay('4th', this)">4th</button>
+        </div>
+        <div id="PlayByPlayContent"></div>
+    </div>
+    <div id="PastMatches" style="display:none;"></div>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -36,12 +185,13 @@
             const {data, error} = await db
                 .from('matches')
                 .select('*, team1:teams!matches_team1_id_fkey(name), team2:teams!matches_team2_id_fkey(name)')
+                .eq('status', 'live')
                 .order('id', {ascending: false})
                 .limit(1)
                 .single();
 
             if (error || !data) {
-                document.getElementById('Scoreboard').textContent = 'No match found';
+                document.getElementById('Scoreboard').innerHTML = '<p style="text-align:center; padding:40px; font-family: Segoe UI, sans-serif; font-size:30px; color:#6c757d;">No live game</p>';
                 return;
             }
 
@@ -68,10 +218,21 @@
         loadMatches();
 
         // Load events
-        async function loadEvents() {
+        async function loadEvents(quarterFilter = null) {
+            const {data: match} = await db
+                .from('matches')
+                .select('id')
+                .eq('status', 'live')
+                .order('id', {ascending: false})
+                .limit(1)
+                .single();
+
+            if (!match) return;
+
             const {data, error} = await db
                 .from('events')
                 .select('*, players(number, first_name, last_name, position)')
+                .eq('match', match.id)
                 .order('id', {ascending: true});
 
             if (error || !data || data.length === 0) {
@@ -118,30 +279,107 @@
                 }
             });
 
-            document.getElementById('PlayByPlay').innerHTML = grouped.reverse().map(({main: ev, assist, save}) => {
-                const player = ev.players ? `#${ev.players.number} ${ev.players.first_name[0]}. ${ev.players.last_name}` : '';
-                const assistStr = assist?.players ? ` (ASSIST: #${assist.players.number} ${assist.players.first_name[0]}. ${assist.players.last_name})` : '';
-                const saveStr = save?.players ? ` (SAVED: #${save.players.number} ${save.players.first_name[0]}. ${save.players.last_name})` : '';
-                const label = ev.result === 'goal' && ev.event === 'pc' ? 'PC GOAL'
-                    : ev.result === 'goal' ? 'GOAL'
-                    : ev.result === 'shot on target' && ev.event === 'pc' ? 'PC SHOT ON TARGET'
-                    : ev.result === 'shot on target' ? 'SHOT ON TARGET'
-                    : ev.result === 'miss' && ev.event === 'pc' ? 'PC MISSED'
-                    : ev.result === 'miss' ? 'SHOT MISSED'
-                    : ev.event === 'foul' ? 'FOUL'
-                    : ev.event === 'pc' ? 'PC'
-                    : ev.event === 'corner' ? 'CORNER'
-                    : `${ev.event.toUpperCase()}${ev.result ? ' (' + ev.result + ')' : ''}`;
-                return `<p>${ev.quarter} ${ev.time} - ${label} ${player}${assistStr}${saveStr}</p>`;
-            }).join('');
+            document.getElementById('PlayByPlayContent').innerHTML = `
+                <div style="max-width:800px; margin:0 auto; padding:0 24px;">
+                    ${grouped.reverse().filter(({main: ev}) => !quarterFilter || ev.quarter === quarterFilter).map(({main: ev, assist, save}) => `
+                        <div style="background:white; border:1px solid #dee2e6; border-radius:8px; padding:14px 20px; margin-bottom:8px; display:flex; align-items:center; gap:16px;">
+                            <span style="color:#6c757d; font-size:13px; min-width:80px;">${ev.quarter} ${ev.time}</span>
+                            <span style="font-weight:600; color:#1d3557;">${label}</span>
+                            <span style="color:#1b1b1b;">${player}${assistStr}${saveStr}</span>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
         }
         loadEvents();
+
+        // Load past matches
+        async function loadPastMatches() {
+            const {data: matches} = await db
+                .from('matches')
+                .select('*, team1:teams!matches_team1_id_fkey(name), team2:teams!matches_team2_id_fkey(name)')
+                .eq('status', 'finished')
+                .order('id', {ascending: false});
+
+            if (!matches || matches.length === 0) {
+                document.getElementById('PastMatches').innerHTML = '<p style="text-align:center; padding:40px;">No past games found.</p>';
+                return;
+            }
+
+            document.getElementById('PastMatches').innerHTML = `
+                <div style="mac-width:800px; margin:24px auto; padding 0 24px;">
+                    <h2 style="margin-bottom:20px; color: #1d3557;">Past Matches</h2>
+                    ${matches.map(m => `
+                    <div style="background:white; border:2px solid #dee2e6; border-radius:8px; padding:20px; margin-bottom:12px; cursor:pointer; display:flex; justify-content:space-between; align-items:center;"
+                        onclick="loadPastMatchDetail(${m.id})">
+                        <div style="font-size:18px; font-weight:bold;">${m.team1.name}</div>
+                        <div style="font-size:24px; font-weight:bold; color:#1d3557;">${m.team1_score} - ${m.team2_score}</div>
+                        <div style="font-size:18px; font-weight:bold;">${m.team2.name}</div>
+                    </div>
+                `).join('')}
+            </div>
+        `;
+        }
+
+        //Load past matches details
+        async function loadPastMatchDetail(matchId) {
+            const {data: match} = await db
+                .from('matches')
+                .select('*, team1:teams!matches_team1_id_fkey(name), team2:teams!matches_team2_id_fkey(name)')
+                .eq('id', matchId)
+                .single();
+            
+            if (!match) return;
+
+            const {data: events} = await db
+                .from('events')
+                .select('*')
+                .eq('match_id', matchId);
+
+            const {data: players1} = await db.from('players').select('*').eq('team_id', match.team1_id);
+            const {data: players2} = await db.from('players').select('*').eq('team_id', match.team2_id);
+            const t1 = computeStats(events, match.team1_id);
+            const t2 = computeStats(events, match.team2_id);
+            const stats1 = buildPlayerStats(players1 || [], events);
+            const stats2 = buildPlayerStats(players2 || [], events);
+
+            document.getElementById('PastMatches').innerHTML = `
+                <div style="max-width:1200px; margin:24px auto; padding:0 24px;">
+                    <button class="stat-btn" onclick="loadPastMatches()" style="margin-bottom:20px;">← Back</button>
+                    <div style="text-align:center; font-size:32px; font-weight:bold; color:#1d3557; padding:20px;">
+                        ${match.team1.name} ${match.team1_score} - ${match.team2_score} ${match.team2.name}
+                    </div>
+                    <div style="text-align:center; margin:12px 0;">
+                        <button class="stat-btn active" onclick="showPastTab('team', this)">Team</button>
+                        <button class="stat-btn" onclick="showPastTab('players', this)">Players</button>
+                    </div>
+                    <div id="PastTeamView">
+                        <div style="text-align:center; margin:12px 0;">
+                            <button class="stat-btn active" onclick="showPastTeam('team1', this)">${match.team1.name}</button>
+                            <button class="stat-btn" onclick="showPastTeam('team2', this)">${match.team2.name}</button>
+                        </div>
+                        <div id="PastTeam1View">${renderTeamTable(t1)}</div>
+                        <div id="PastTeam2View" style="display:none">${renderTeamTable(t2)}</div>
+                    </div>
+                    <div id="PastPlayersView" style="display:none">
+                        <div style="text-align:center; margin:12px 0;">
+                            <button class="stat-btn active" onclick="showPastPlayers('team1', this)">${match.team1.name}</button>
+                            <button class="stat-btn" onclick="showPastPlayers('team2', this)">${match.team2.name}</button>
+                        </div>
+                        <div id="PastPlayers1View">${renderPlayerTable(stats1, 'PastPlayers1View')}</div>
+                        <div id="PastPlayers2View" style="display:none">${renderPlayerTable(stats2, 'PastPlayers2View')}</div>
+                    </div>
+                </div>
+            `;
+
+        }
 
         // Load team stats
         async function loadTeamView(quarterFilter = null) {
             const {data: match} = await db
                 .from('matches')
                 .select('*, team1:teams!matches_team1_id_fkey(name), team2:teams!matches_team2_id_fkey(name)')
+                .eq('status', 'live')
                 .order('id', {ascending: false})
                 .limit(1)
                 .single();
@@ -155,88 +393,8 @@
 
             if (!events) return;
 
-            const {data: players1} = await db.from('players').select('*').eq('team_id', match.team1_id);
-            const {data: players2} = await db.from('players').select('*').eq('team_id', match.team2_id);
-            const allPlayers = [...(players1 || []), ...(players2 || [])];
-
-            function compute(teamId, quarter = null) {
-                let e = events.filter(ev => ev.team_id === teamId);
-                if (quarter) e = e.filter(ev => ev.quarter === quarter);
-                const goals = e.filter(ev => ev.result === 'goal').length;
-                const shots = e.filter(ev => ev.event === 'shot' && ev.result !== 'saved').length;
-                const shotsOnTarget = e.filter(ev => ev.result === 'shot on target' || ev.result === 'goal').length;
-                const shotsMissed = e.filter(ev => ev.result === 'miss').length;
-                const assists = e.filter(ev => ev.event ==='assist').length;
-                const saves = e.filter(ev => ev.result === 'saved').length;
-                const pcs = e.filter(ev => ev.event === 'pc').length;
-                const pcGoals = e.filter(ev => ev.event === 'pc' && ev.result === 'goal').length;
-                const corners = e.filter(ev => ev.event === 'corner').length;
-                const fouls = e.filter(ev => ev.event === 'foul').length;
-                const shotsConceded = events.filter(ev => ev.team_id !== teamId && (ev.result === 'shot on target' || ev.result === 'goal')).length;
-                return {
-                    goals, assists, shots, shotsOnTarget, shotsMissed, saves, pcs, pcGoals, corners, fouls, shotsConceded,
-                    shotAccuracy: shots > 0 ? Math.round((shotsOnTarget / shots) * 100) : 0,
-                    shotEfficiency: shots > 0 ? Math.round((goals / shots) * 100) : 0,
-                    pcConversion: pcs > 0 ? Math.round((pcGoals / pcs) * 100) : 0,
-                    savePercentage: shotsConceded > 0 ? Math.round((saves / shotsConceded) * 100) : 0,
-                };
-            }
-
-            const t1 = compute(match.team1_id, quarterFilter);
-            const t2 = compute(match.team2_id, quarterFilter);
-
-            function getPlayersBreakdown(teamId, stat)  {
-                const teamPlayers = allPlayers.filter(p => p.team_id === teamId);
-                return teamPlayers
-                    .map(p => {
-                        const pe = events.filter(ev => ev.player_id === p.id);
-                        let count = 0;
-                        if (stat === 'goals') count = pe.filter(ev => ev.result === 'goal').length;
-                        if (stat === 'shots') count = pe.filter(ev => (ev.event === 'shot' || ev.event === 'pc') && ev.result !== 'saved').length;
-                        if (stat === 'assists') count = pe.filter(ev => ev.event === 'assist').length;
-                        if (stat === 'saves') count = pe.filter(ev => ev.result === 'saved').length;
-                        if (stat === 'pcs') count = pe.filter(ev => ev.event === 'pc').length;
-                        if (stat === 'shotsOnTarget') count = pe.filter(ev => ev.result === 'shot on target' || ev.result === 'goal').length;
-                        return count > 0 ? `${p.first_name[0]}. ${p.last_name}: ${count}` : null;
-                    })
-                    .filter(Boolean)
-                    .join('\n');
-            }
-
-            function renderTeamTable(s, teamName) {
-                return `
-                    <h3>${teamName}</h3>
-                    <div style="display:flex; gap:20px;">
-                        <div style="flex:1">    
-                            <table border="1" style="width:100%">
-                                <thead><tr><th>Stat</th><th>Value</th></tr></thead>
-                                <tbody>
-                                    <tr><td>Goals</td><td>${s.goals}</td></tr>
-                                    <tr><td>Shots</td><td>${s.shots}</td></tr>
-                                    <tr><td>Shots on Target</td><td>${s.shotsOnTarget}</td></tr>
-                                    <tr><td>Shots Missed</td><td>${s.shotsMissed}</td></tr>
-                                    <tr><td>Assists</td><td>${s.assists}</td></tr>
-                                    <tr><td>Saves</td><td>${s.saves}</td></tr>
-                                    <tr><td>Penalty Corners</td><td>${s.pcs}</td></tr>
-                                    <tr><td>Corners</td><td>${s.corners}</td></tr>
-                                    <tr><td>Fouls</td><td>${s.fouls}</td></tr>
-                                </tbody>
-                            </table>
-                        </div>
-                        <div style="flex:1">
-                            <table border="1" style="width:100%">
-                                <thead><tr><th>Stat</th><th>Ratio</th><th>%</th></tr></thead>
-                                <tbody>
-                                    <tr><td>Shot Accuracy</td><td>${s.shotsOnTarget}/${s.shots}</td><td>${s.shotAccuracy}%</td></tr>
-                                    <tr><td>Shot Efficiency</td><td>${s.goals}/${s.shots}</td><td>${s.shotEfficiency}%</td></tr>
-                                    <tr><td>PC Conversion</td><td>${s.pcGoals}/${s.pcs}</td><td>${s.pcConversion}%</td></tr>
-                                    <tr><td>Save %</td><td>${s.saves}/${s.shotsConceded}</td><td>${s.savePercentage}%</td></tr>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                `;
-            }
+            const t1 = computeStats(events, match.team1_id, quarterFilter);
+            const t2 = computeStats(events, match.team2_id, quarterFilter);
 
             document.getElementById('btnTeam1').textContent = match.team1.name;
             document.getElementById('btnTeam2').textContent = match.team2.name;
@@ -249,10 +407,10 @@
             teamChart = new Chart(ctx, {
                 type: 'bar',
                 data: {
-                    labels: ['Goals', 'Assists', 'Shots', 'Shots on target', 'PC', 'Saves'],
+                    labels: ['Goals', 'Assists', 'Shots', 'Shots on target', 'PC', 'Circle entries', 'Saves'],
                     datasets: [
-                        {label: match.team1.name, data: [t1.goals, t1.assists, t1.shots, t1.shotsOnTarget, t1.pcs, t1.saves], backgroundColor: 'rgba(54, 162, 235, 0.6)'},
-                        {label: match.team2.name, data: [t2.goals, t2.assists, t2.shots, t2.shotsOnTarget, t2.pcs, t2.saves], backgroundColor: 'rgba(255, 99, 132, 0.6)'},
+                        {label: match.team1.name, data: [t1.goals, t1.assists, t1.shots, t1.shotsOnTarget, t1.pcs, t1.entries, t1.saves], backgroundColor: 'rgba(54, 162, 235, 0.6)'},
+                        {label: match.team2.name, data: [t2.goals, t2.assists, t2.shots, t2.shotsOnTarget, t2.pcs, t2.entries, t2.saves], backgroundColor: 'rgba(255, 99, 132, 0.6)'},
                     ]
                 },
                 options: {responsive: true, plugins: 
@@ -270,23 +428,18 @@
                                 'PC' : 'pcs',
                                 'Saves' : 'saves'
                             };
-                            const stat = statMap[label];
-                            if (!stat) return '';
-                            return getPlayersBreakdown(teamId, stat);
                         }
                     }}
                 }}
             });
         }
 
-        function filterQuarter(quarter) {
-                loadTeamView(quarter === 'all' ? null : quarter);
-        }
         // Load individual stats
-        async function loadPlayerView() {
+        async function loadPlayerView(quarterFilter = null) {
             const {data: match} = await db
                 .from('matches')
                 .select('*, team1:teams!matches_team1_id_fkey(name), team2:teams!matches_team2_id_fkey(name)')
+                .eq('status', 'live')
                 .order('id', {ascending: false})
                 .limit(1)
                 .single();
@@ -300,59 +453,14 @@
 
             if (!events) return;
 
-            matchEvents = events;
-
             const {data: players1} = await db.from('players').select('*').eq('team_id', match.team1_id);
             const {data: players2} = await db.from('players').select('*').eq('team_id', match.team2_id);
 
-            function buildPlayerStats(players, teamId) {
-                return players.map(p => {
-                    players.forEach(p => playerRegistry[p.id] = p);
-                    const pe = events.filter(ev => ev.player_id === p.id);
-                    const goals = pe.filter(ev => ev.result === 'goal').length;
-                    const assists = pe.filter(ev => ev.event === 'assist').length;
-                    const shots = pe.filter(ev => (ev.event === 'shot' || ev.event === 'pc') && ev.result !== 'saved').length;
-                    const shotsOnTarget = pe.filter(ev => ev.result === 'shot on target').length;
-                    const saves = pe.filter(ev => ev.result === 'saved').length;
-                    const shotAccuracy = shots > 0 ? Math.round((shotsOnTarget / shots) * 100) : 0;
-                    const shotEfficiency = shots > 0 ? Math.round((goals / shots) * 100) : 0;
-                    return {...p, goals, assists, shots, shotsOnTarget, saves, shotAccuracy, shotEfficiency};
-                });
-            }
+            let filteredEvents = events;
+            if (quarterFilter) filteredEvents = events.filter(ev => ev.quarter === quarterFilter);
 
-
-            function renderPlayerTable(playerStats, containerId) {
-                return `
-                    <div id="PlayerChart_${containerId}" style="margin-bottom:20px"></div>
-                    <table border="1">
-                        <thead>
-                            <tr><th>#</th><th>Player</th><th>Pos</th><th>Goals</th><th>Assists</th><th>Shots</th><th>On Target</th><th>Accuracy</th><th>Efficiency</th><th>Saves</th></tr>
-                        </thead>
-                        <tbody>
-                            ${playerStats.sort((a,b) => b.goals - a.goals).map(p => `
-                                <tr style="cursor:pointer" onclick="showPlayerChart(${p.id}, ${p.goals}, ${p.assists}, ${p.shots}, ${p.shotsOnTarget}, ${p.saves}, '${containerId}')">
-                                    <td>${p.number}</td>
-                                    <td>${p.first_name[0]}. ${p.last_name}</td>
-                                    <td>${p.position || '-'}</td>
-                                    <td>${p.goals}</td>
-                                    <td>${p.assists}</td>
-                                    <td>${p.shots}</td>
-                                    <td>${p.shotsOnTarget}</td>
-                                    <td>${p.shotAccuracy}%</td>
-                                    <td>${p.shotEfficiency}%</td>
-                                    <td>${p.saves}</td>
-                                </tr>
-                            `).join('')}
-                        </tbody>
-                    </table>
-                `;
-            }
-
-            const stats1 = buildPlayerStats(players1 || [], match.team1_id);
-            const stats2 = buildPlayerStats(players2 || [], match.team2_id);
-
-            players1.forEach(p => playerRegistry[p.id] = p);
-            players2.forEach(p => playerRegistry[p.id] = p);
+            const stats1 = buildPlayerStats(players1 || [], filteredEvents);
+            const stats2 = buildPlayerStats(players2 || [], filteredEvents);
 
             document.getElementById('btnPlayer1').textContent = match.team1.name;
             document.getElementById('btnPlayer2').textContent = match.team2.name;
@@ -360,32 +468,138 @@
             document.getElementById('Team2PlayerView').innerHTML = renderPlayerTable(stats2, 'Team2PlayerView');
         }
 
+        // ── Shared render functions ──────────────────────────────────
+        function computeStats(events, teamId, quarterFilter = null) {
+            let e = events.filter(ev => ev.team_id === teamId);
+            if (quarterFilter) e = e.filter(ev => ev.quarter === quarterFilter);
+            const goals = e.filter(ev => ev.result === 'goal').length;
+            const shots = e.filter(ev => ev.event === 'shot' && ev.result !== 'saved').length;
+            const shotsOnTarget = e.filter(ev => ev.result === 'shot on target' || ev.result === 'goal').length;
+            const shotsMissed = e.filter(ev => ev.result === 'miss').length;
+            const assists = e.filter(ev => ev.event === 'assist').length;
+            const saves = e.filter(ev => ev.result === 'saved').length;
+            const pcs = e.filter(ev => ev.event === 'pc').length;
+            const pcGoals = e.filter(ev => ev.event === 'pc' && ev.result === 'goal').length;
+            const corners = e.filter(ev => ev.event === 'corner').length;
+            const fouls = e.filter(ev => ev.event === 'foul').length;
+            const entries = e.filter(ev => ev.event === 'entry').length;
+            const shotsConceded = events.filter(ev => ev.team_id !== teamId && (ev.result === 'shot on target' || ev.result === 'goal')).length;
+            return {
+                goals, assists, shots, shotsOnTarget, shotsMissed, saves, pcs, pcGoals, corners, fouls, entries, shotsConceded,
+                shotAccuracy: shots > 0 ? Math.round((shotsOnTarget / shots) * 100) : 0,
+                shotEfficiency: shots > 0 ? Math.round((goals / shots) * 100) : 0,
+                pcConversion: pcs > 0 ? Math.round((pcGoals / pcs) * 100) : 0,
+                savePercentage: shotsConceded > 0 ? Math.round((saves / shotsConceded) * 100) : 0,
+            };
+        }
+
+        function renderTeamTable(s) {
+            const valueRows = [
+                {label: 'Goals', value: s.goals},
+                {label: 'Shots', value: s.shots},
+                {label: 'Shots on Target', value: s.shotsOnTarget},
+                {label: 'Shots Missed', value: s.shotsMissed},
+                {label: 'Assists', value: s.assists},
+                {label: 'Saves', value: s.saves},
+                {label: 'Penalty Corners', value: s.pcs},
+                {label: 'Corners', value: s.corners},
+                {label: 'Fouls', value: s.fouls},
+                {label: 'Entries', value: s.entries},
+            ];
+            const ratioRows = [
+                {label: 'Shot Accuracy', ratio: `${s.shotsOnTarget}/${s.shots}`, pct: `${s.shotAccuracy}%`},
+                {label: 'Shot Efficiency', ratio: `${s.goals}/${s.shots}`, pct: `${s.shotEfficiency}%`},
+                {label: 'PC Conversion', ratio: `${s.pcGoals}/${s.pcs}`, pct: `${s.pcConversion}%`},
+                {label: 'Save %', ratio: `${s.saves}/${s.shotsConceded}`, pct: `${s.savePercentage}%`},
+            ];
+            return `
+                <div style="display:flex; gap:40px; margin-top:40px; padding:0 20px;">
+                    <div style="width:45%">
+                        <table style="width:100%">
+                            <thead><tr><th>Stat</th><th>Value</th></tr></thead>
+                            <tbody>${valueRows.map(r => `<tr><td>${r.label}</td><td>${r.value}</td></tr>`).join('')}</tbody>
+                        </table>
+                    </div>
+                    <div style="width:45%">
+                        <table style="width:100%">
+                            <thead><tr><th>Stat</th><th>Ratio</th><th>%</th></tr></thead>
+                            <tbody>${ratioRows.map(r => `<tr><td>${r.label}</td><td>${r.ratio}</td><td>${r.pct}</td></tr>`).join('')}</tbody>
+                        </table>
+                    </div>
+                </div>
+            `;
+        }
+
+        function buildPlayerStats(players, events) {
+            players.forEach(p => playerRegistry[p.id] = p);
+            return players.map(p => {
+                const pe = events.filter(ev => ev.player_id === p.id);
+                const goals = pe.filter(ev => ev.result === 'goal').length;
+                const assists = pe.filter(ev => ev.event === 'assist').length;
+                const shots = pe.filter(ev => (ev.event === 'shot' || ev.event === 'pc') && ev.result !== 'saved').length;
+                const shotsOnTarget = pe.filter(ev => ev.result === 'shot on target' || ev.result === 'goal').length;
+                const saves = pe.filter(ev => ev.result === 'saved').length;
+                const shotAccuracy = shots > 0 ? Math.round((shotsOnTarget / shots) * 100) : 0;
+                const shotEfficiency = shots > 0 ? Math.round((goals / shots) * 100) : 0;
+                const isGK = p.position?.toLowerCase() === 'gk';
+                const shotsConceded = isGK ? events.filter(ev => ev.team_id !== p.team_id && (ev.result === 'shot on target' || ev.result === 'goal')).length : 0;
+                return {...p, goals, assists, shots, shotsOnTarget, saves, shotAccuracy, shotEfficiency, shotsConceded};
+            });
+        }
+
+        function renderPlayerTable(playerStats, containerId) {
+            return `
+                <table border="1" style="width:90%; border-collapse:collapse; margin:0 auto;">
+                    <thead>
+                        <tr><th>#</th><th>Player</th><th>Pos</th><th>Goals</th><th>Assists</th><th>Shots</th><th>On Target</th><th>Accuracy</th><th>Efficiency</th><th>Saves</th></tr>
+                    </thead>
+                    <tbody>
+                        ${playerStats.sort((a,b) => parseInt(a.number) - parseInt(b.number)).map(p => `
+                            <tr style="cursor:pointer" onclick="showPlayerChart(${p.id}, ${p.goals}, ${p.assists}, ${p.shots}, ${p.shotsOnTarget}, ${p.saves}, ${p.shotsConceded}, '${containerId}')">
+                                <td>${p.number}</td><td>${p.first_name[0]}. ${p.last_name}</td><td>${p.position || '-'}</td>
+                                <td>${p.goals}</td><td>${p.assists}</td><td>${p.shots}</td>
+                                <td>${p.shotsOnTarget}</td><td>${p.shotAccuracy}%</td><td>${p.shotEfficiency}%</td><td>${p.saves}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            `;
+        }
+
+        // Initialize statistics
         function initStatistics() {
         document.getElementById('Statistics').innerHTML = `
             <div>
-                <button onclick="showStatsTab('team')">Team</button>
-                <button onclick="showStatsTab('players')">Players</button>
+                <button class="stat-btn" onclick="showStatsTab('team', this)">Team</button>
+                <button class="stat-btn" onclick="showStatsTab('players', this)">Players</button>
             </div>
             <div id="StatTeam">
                 <div>
-                    <button onclick="filterQuarter('all')">Total</button>
-                    <button onclick="filterQuarter('1st')">1st</button>
-                    <button onclick="filterQuarter('2nd')">2nd</button>
-                    <button onclick="filterQuarter('3rd')">3rd</button>
-                    <button onclick="filterQuarter('4th')">4th</button>
+                    <button class="stat-btn" onclick="filterTeamQuarter('all', this)">Total</button>
+                    <button class="stat-btn" onclick="filterTeamQuarter('1st', this)">1st</button>
+                    <button class="stat-btn" onclick="filterTeamQuarter('2nd', this)">2nd</button>
+                    <button class="stat-btn" onclick="filterTeamQuarter('3rd', this)">3rd</button>
+                    <button class="stat-btn" onclick="filterTeamQuarter('4th', this)">4th</button>
                 </div>
                 <div>
-                    <button onclick="showTeamView('team1')" id="btnTeam1"></button>
-                    <button onclick="showTeamView('team2')" id="btnTeam2"></button>
+                    <button class="stat-btn" onclick="showTeamView('team1', this)" id="btnTeam1"></button>
+                    <button class="stat-btn" onclick="showTeamView('team2', this)" id="btnTeam2"></button>
                 </div>
                 <canvas id="teamChart" width="100" height="30"></canvas>
-                <div id="Team1View"></div>
-                <div id="Team2View" style="display:none"></div>
+                <div id="Team1View" style="width:100%"></div>
+                <div id="Team2View" style="display:none; width:100%"></div>
             </div>
             <div id="StatPlayers" style="display:none">
                 <div>
-                    <button onclick="showPlayerView('team1')" id="btnPlayer1"></button>
-                    <button onclick="showPlayerView('team2')" id="btnPlayer2"></button>
+                    <button class="stat-btn" onclick="filterPlayerQuarter('all', this)">Total</button>
+                    <button class="stat-btn" onclick="filterPlayerQuarter('1st', this)">1st</button>
+                    <button class="stat-btn" onclick="filterPlayerQuarter('2nd', this)">2nd</button>
+                    <button class="stat-btn" onclick="filterPlayerQuarter('3rd', this)">3rd</button>
+                    <button class="stat-btn" onclick="filterPlayerQuarter('4th', this)">4th</button>
+                </div>
+                <div>
+                    <button class="stat-btn" onclick="showPlayerView('team1', this)" id="btnPlayer1"></button>
+                    <button class="stat-btn" onclick="showPlayerView('team2', this)" id="btnPlayer2"></button>
                 </div>
                 <div id="Team1PlayerView"></div>
                 <div id="Team2PlayerView" style="display:none"></div>
@@ -393,21 +607,63 @@
         `;
         loadTeamView();
         loadPlayerView();
+        // Set default active buttons
+        document.querySelector('#Statistics > div:first-child .stat-btn').classList.add('active');
+        document.querySelector('#StatTeam > div:first-child .stat-btn').classList.add('active');
+        document.querySelector('#StatTeam > div:nth-child(2) .stat-btn').classList.add('active');
+
+        // Show team1 by default
+        document.getElementById('Team2View').style.display = 'none';
     }
         initStatistics();
 
         // Player chart
-        function showPlayerChart(id, goals, assists, shots, shotsOnTarget, saves, containerId) {
+        function showPlayerChart(id, goals, assists, shots, shotsOnTarget, saves, shotsConceded, containerId) {
             const p = playerRegistry[id];
             if (!p) return;
             const name = `${p.first_name[0]}. ${p.last_name}`;
+            const isGK = p?.position?.toLowerCase() === 'gk';
+            const shotAccuracy = shots > 0 ? Math.round((shotsOnTarget / shots) * 100) : 0;
+            const shotEfficiency = shots > 0 ? Math.round((goals / shots) * 100) : 0;
+            const savePercentage = shotsConceded > 0 ? Math.round((saves / shotsConceded) * 100) : 0;
 
-            document.getElementById('PlayerChart_' + containerId).innerHTML = `
-                <h3>${name}</h3>
-                <canvas id="playerChartCanvas_${containerId}" width="100" height="20"></canvas>
+            const accuracyStr = !isGK
+                ? `<tr><td>Shot Accuracy</td><td>${shotsOnTarget}/${shots}</td><td>${shotAccuracy}%</td></tr>` : '';
+            const efficiencyStr = !isGK
+                ? `<tr><td>Shot Efficiency</td><td>${goals}/${shots}</td><td>${shotEfficiency}%</td></tr>` : '';
+            const saveStr = p?.position?.toLowerCase() === 'gk' 
+                ? `<tr><td>Save %</td><td>${saves}/${shotsConceded}</td><td>${savePercentage}%</td></tr>` : '';
+
+            const popup = document.createElement('div');
+            popup.style.cssText = `
+                position:fixed; top:0; left:0; width:100%; height:100%;
+                background:rgba(0,0,0,0.5); display:flex; justify-content:center;
+                align-items:center; z-index:1000;
             `;
 
-            const ctx = document.getElementById('playerChartCanvas_' + containerId).getContext('2d');
+            popup.innerHTML = `
+                <div style="background:white; padding:30px; border-radius:8px; width:700px; max-width:95%;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                        <h3 style="margin:0">${name}</h3>
+                        <button onclick="this.closest('.popup').remove()" style="cursor:pointer; font-size:18px; border:none; background:none";>✕</button>
+                    </div>
+                    <canvas id="popupChart" width="400" height="250"></canvas>
+                    <table border="1" style="width:100%"; margin-top:20px;">
+                        <thead><tr><th>Stat</th><th>Ratio</th><th>%</th></tr></thead>
+                        <tbody>
+                            ${accuracyStr}
+                            ${efficiencyStr}
+                            ${saveStr}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+
+            popup.classList.add('popup');
+            popup.addEventListener('click', (e) => {if (e.target === popup) popup.remove();});
+            document.body.appendChild(popup);
+
+            const ctx = document.getElementById('popupChart').getContext('2d');
             new Chart(ctx, {
                 type: 'bar',
                 data: {
@@ -423,25 +679,74 @@
         }
 
         // Tabs
-        function showStats(tab) {
+        function showStats(tab, btn) {
             document.getElementById('Statistics').style.display = tab === 'statistics' ? 'block' : 'none';
             document.getElementById('PlayByPlay').style.display = tab === 'play' ? 'block' : 'none';
+            document.getElementById('PastMatches').style.display = tab === 'past' ? 'block' : 'none';
+            document.querySelectorAll('.nav button').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            if (tab === 'past') loadPastMatches();
         }
 
-        function showStatsTab(tab) {
-            document.getElementById('StatTeam').style.display = tab === 'team' ? 'block' : 'none';
-            document.getElementById('StatPlayers').style.display = tab === 'players' ? 'block' : 'none';
-
-        }
-
-        function showTeamView(team) {
+        function showTeamView(team, btn) {
             document.getElementById('Team1View').style.display = team === 'team1' ? 'block' : 'none';
             document.getElementById('Team2View').style.display = team === 'team2' ? 'block' : 'none';
+            btn.parentElement.querySelectorAll('.stat-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+        }
+        
+        function filterTeamQuarter(quarter, btn) {
+                loadTeamView(quarter === 'all' ? null : quarter);
+                btn.parentElement.querySelectorAll('.stat-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
         }
 
-        function showPlayerView(team) {
+        function filterPlayerQuarter(quarter, btn) {
+                loadPlayerView(quarter === 'all' ? null : quarter);
+                btn.parentElement.querySelectorAll('.stat-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+        }
+
+        function showPlayerView(team, btn) {
             document.getElementById('Team1PlayerView').style.display = team === 'team1' ? 'block' : 'none';
             document.getElementById('Team2PlayerView').style.display = team === 'team2' ? 'block' : 'none';
+            btn.parentElement.querySelectorAll('.stat-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+        }
+
+        function showStatsTab(tab, btn) {
+            document.getElementById('StatTeam').style.display = tab === 'team' ? 'block' : 'none';
+            document.getElementById('StatPlayers').style.display = tab === 'players' ? 'block' : 'none';
+            // Mark active
+            btn.parentElement.querySelectorAll('.stat-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+        }
+
+        function showPastTab(tab, btn) {
+            document.getElementById('PastTeamView').style.display = tab === 'team' ? 'block' : 'none';
+            document.getElementById('PastPlayersView').style.display = tab === 'players' ? 'block' : 'none';
+            btn.parentElement.querySelectorAll('.stat-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+        }
+
+        function showPastTeam(team, btn) {
+            document.getElementById('PastTeam1View').style.display = team === 'team1' ? 'block' : 'none';
+            document.getElementById('PastTeam2View').style.display = team === 'team2' ? 'block' : 'none';
+            btn.parentElement.querySelectorAll('.stat-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+        }
+
+        function showPastPlayers(team, btn) {
+            document.getElementById('PastPlayers1View').style.display = team === 'team1' ? 'block' : 'none';
+            document.getElementById('PastPlayers2View').style.display = team === 'team2' ? 'block' : 'none';
+            btn.parentElement.querySelectorAll('.stat-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+        }
+
+        function filterPlayByPlay(quarter, btn) {
+            loadEvents(quarter === 'all' ? null : quarter);
+            btn.parentElement.querySelectorAll('.stat-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
         }
 
         // Realtime

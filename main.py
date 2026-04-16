@@ -13,7 +13,7 @@ import session as ss
 
 def main():
     root = tk.Tk()
-    root.title("Hockey Stats")
+    root.title("Field Hockey Stats")
     root.state("zoomed")
 
     # Load team data
@@ -308,6 +308,7 @@ def main():
     tc.setup_foul(root, get_quarter_time, "team1", 310, player_frame1, player_frame2)
     tc.setup_pc(root, get_quarter_time, score1_label, "team1", "team2", 310, player_frame1, player_frame2)
     tc.setup_corner(root, get_quarter_time, "team1", 310, player_frame1, player_frame2)
+    tc.setup_entry(root, get_quarter_time, "team1", 310, player_frame1, player_frame2)
 
     # Buttons team 2
     tc.setup_goal(root, get_quarter_time, score2_label, "team2", 1100, player_frame1, player_frame2)
@@ -315,6 +316,7 @@ def main():
     tc.setup_foul(root, get_quarter_time, "team2", 1100, player_frame1, player_frame2)
     tc.setup_pc(root, get_quarter_time, score2_label, "team2", "team1", 1100, player_frame1, player_frame2)
     tc.setup_corner(root, get_quarter_time, "team2", 1100, player_frame1, player_frame2)
+    tc.setup_entry(root, get_quarter_time, "team2", 1100, player_frame1, player_frame2)
 
     # Reset stats button (Temporary, for testing purposes)
     def reset_stats():

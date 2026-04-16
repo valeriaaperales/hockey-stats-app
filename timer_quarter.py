@@ -1,5 +1,7 @@
 import tkinter as tk
 
+from session import save_match_id
+
 def setup_timer(root):
     #Quarter frame
     quarters = ["1st", "2nd", "3rd", "4th"]
@@ -80,6 +82,44 @@ def setup_timer(root):
                 start.config(text="Ended")
                 start.config(state="disabled")
                 tk.Label(root, text="Match ended", font=("Arial", 24, "bold"), fg="red").place(x=650, y=250)
+                
+                #Save match
+                import game_state as gs
+                if gs.selected_event[0] is None or gs.selected_event[0].get("event") != "pc":
+                    popup = tk.Toplevel(root)
+                    popup.title("Match Ended")
+                    popup.geometry("300x200")
+                    popup.resizable(False, False)
+                    popup.grab_set()
+                    popup.update_idletasks()
+                    x = (popup.winfo_screenwidth() // 2) - 150
+                    y = (popup.winfo_screenheight() // 2) - 100
+                    popup.geometry(f"300x200+{x}+{y}")
+
+                    tk.Label(popup, text="Match has ended", font=("Arial", 14, "bold")).pack(pady=20)
+
+                    def on_save():
+                        try:
+                            from database import supabase
+                            import session as ss
+                            match_id = ss.get_match_id()
+                            if match_id:
+                                supabase.table("matches").update({"status": "finished"}).eq("id", match_id).execute()
+                                print("Match saved successfully")
+                        except Exception as e:
+                            print(f"Error saving match: {e}")
+                        popup.destroy()
+                    
+                    def on_new_match():
+                        on_save()
+                        import subprocess, sys
+                        root.destroy()
+                        subprocess.Popen([sys.executable, "team_data.py"])
+
+                    tk.Button(popup, text="Save Match", font=("Arial", 12, "bold"), bg="#4CAF50", fg="white",
+                        command=on_save).pack(pady=5, fill="x", padx=20)
+                    tk.Button(popup, text="Save & New Match", font=("Arial", 12, "bold"), bg="#1d3557", fg="white",
+                        command=on_new_match).pack(pady=5, fill="x", padx=20)
 
     
     #Start/Stop/Reset button function

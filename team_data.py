@@ -247,6 +247,19 @@ def main():
 
             ss.save_teams_ids(team1_id, team2_id)
 
+            # Create match in Supabase
+            match_response = supabase.table("matches").insert({
+                "team1_id": team1_id,
+                "team2_id": team2_id,
+                "team1_score": 0,
+                "team2_score": 0,
+                "status": "live"
+            }).execute()
+
+            match_id = match_response.data[0]["id"]
+            ss.save_match_id(match_id)
+
+
         except Exception as e:
             print(f"Error saving to database: {e}")
             messagebox.showwarning("Warning", "Could not connect to Supabase. Data saved locally only.")
